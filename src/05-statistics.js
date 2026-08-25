@@ -8,13 +8,13 @@
             }
             // Reset combo timeout
             if (CONFIG.comboTimeoutId) clearTimeout(CONFIG.comboTimeoutId);
-            CONFIG.comboTimeoutId = setTimeout(() => {
+            CONFIG.comboTimeoutId = scheduleTrackedTimeout(() => {
                 if (CONFIG.stats.currentCombo > 0) {
                     CONFIG.stats.combos++;
                     showNotification(`Combo End: ${CONFIG.stats.currentCombo}x`, 'info', 'combo');
                     CONFIG.stats.currentCombo = 0;
                 }
-            }, MODES.combo.comboTimeout);
+            }, MODES.combo.comboTimeout, CONFIG.clickTimerIds);
         } else {
             if (CONFIG.stats.currentCombo > 0) {
                 CONFIG.stats.combos++;
@@ -46,7 +46,7 @@
                 <span style="color: #ff3b5c">Mode: ${MODES[CONFIG.mode].name}</span><br>
                 Runtime: ${runtime}s<br>
                 Total Clicks: ${CONFIG.stats.totalClicks}<br>
-                Success Rate: ${Math.round((CONFIG.stats.successfulClicks / CONFIG.stats.totalClicks) * 100 || 0)}%<br>
+                Local Dispatch Rate: ${Math.round((CONFIG.stats.successfulClicks / CONFIG.stats.totalClicks) * 100 || 0)}%<br>
                 Current Combo: <span style="color: #ff3b5c">${CONFIG.stats.currentCombo}x</span><br>
                 Max Combo: <span style="color: #ff3b5c">${CONFIG.stats.maxCombo}x</span><br>
                 Total Combos: ${CONFIG.stats.combos}<br>

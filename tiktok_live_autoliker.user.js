@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TikTok Live AutoLiker
 // @namespace    http://tampermonkey.net/
-// @version      0.1.0
+// @version      0.2.0
 // @description  Advanced auto-liker for TikTok live streams with ultra-fast combo mode
 // @author       joqtan
 // @match        https://www.tiktok.com/*
@@ -32,6 +32,44 @@
     - Performance optimization
     `);
 
+    const STORAGE = (() => {
+        try {
+            const storage = window.localStorage;
+            return {
+                get(key) {
+                    try {
+                        return storage.getItem(key);
+                    } catch (error) {
+                        return null;
+                    }
+                },
+                set(key, value) {
+                    try {
+                        storage.setItem(key, value);
+                    } catch (error) {
+                        // Storage can be disabled or full; runtime behavior still works.
+                    }
+                }
+            };
+        } catch (error) {
+            return {
+                get() {
+                    return null;
+                },
+                set() {}
+            };
+        }
+    })();
+
+    function readPosition(key, fallback) {
+        const value = STORAGE.get(key);
+        if (value === 'auto' || /^-?\d+(?:\.\d+)?px$/.test(value || '') ||
+            /^\d+(?:\.\d+)?%$/.test(value || '')) {
+            return value;
+        }
+        return fallback;
+    }
+
     const CUSTOM_DELAY_LIMITS = {
         min: 10,
         max: 2000
@@ -43,7 +81,7 @@
 
     function loadCustomDelaySettings() {
         try {
-            const saved = JSON.parse(localStorage.getItem('autoLikerCustomDelays'));
+            const saved = JSON.parse(STORAGE.get('autoLikerCustomDelays'));
             if (!saved || !Number.isInteger(saved.min) || !Number.isInteger(saved.max) ||
                 saved.min < CUSTOM_DELAY_LIMITS.min || saved.max > CUSTOM_DELAY_LIMITS.max ||
                 saved.max < saved.min) {
@@ -58,7 +96,7 @@
 
     function saveCustomDelaySettings() {
         try {
-            localStorage.setItem('autoLikerCustomDelays', JSON.stringify(CONFIG.customDelay));
+            STORAGE.set('autoLikerCustomDelays', JSON.stringify(CONFIG.customDelay));
         } catch (error) {
             if (CONFIG.debugMode) {
                 console.warn('Unable to save custom delay settings:', error);
@@ -70,7 +108,7 @@
     const CONFIG = {
         enabled: false,
         buttonKey: 'l',
-        showNotifications: localStorage.getItem('autoLikerShowNotifications') !== 'false',
+        showNotifications: STORAGE.get('autoLikerShowNotifications') !== 'false',
         stats: {
             totalClicks: 0,
             startTime: null,
@@ -83,14 +121,46 @@
         mode: 'normal',
         customDelay: loadCustomDelaySettings(),
         comboTimeoutId: null,
+        clickTimerIds: new Set(),
+        uiTimerIds: new Set(),
+        uiIntervalIds: new Set(),
+        retryTimerIds: new Set(),
+        dragCleanup: null,
+        keyboardCleanup: null,
         lastClickTime: 0,
         debugMode: true,
         isCollapsed: false,
         position: {
-            x: localStorage.getItem('autoLikerPosX') || 'auto',
-            y: localStorage.getItem('autoLikerPosY') || '50%'
+            x: readPosition('autoLikerPosX', 'auto'),
+            y: readPosition('autoLikerPosY', '50%')
         }
     };
+
+    function scheduleTrackedTimeout(callback, delay, timerSet) {
+        const timerId = setTimeout(() => {
+            timerSet.delete(timerId);
+            callback();
+        }, delay);
+        timerSet.add(timerId);
+        return timerId;
+    }
+
+    function clearTrackedTimers(timerSet) {
+        timerSet.forEach((timerId) => clearTimeout(timerId));
+        timerSet.clear();
+    }
+
+    function clearAutoLikerTimers() {
+        clearTrackedTimers(CONFIG.clickTimerIds);
+        clearTrackedTimers(CONFIG.uiTimerIds);
+        clearTrackedTimers(CONFIG.retryTimerIds);
+        CONFIG.uiIntervalIds.forEach((timerId) => clearInterval(timerId));
+        CONFIG.uiIntervalIds.clear();
+        if (CONFIG.comboTimeoutId) {
+            clearTimeout(CONFIG.comboTimeoutId);
+            CONFIG.comboTimeoutId = null;
+        }
+    }
 
     // Mode configurations
     const MODES = {
@@ -226,10 +296,10 @@
                 if (group) groupedNotifications.set(group, groupedNotification);
             }
 
-            groupedNotification.hideTimeout = setTimeout(() => {
+            groupedNotification.hideTimeout = scheduleTrackedTimeout(() => {
                 if (group && groupedNotifications.get(group) !== groupedNotification) return;
                 notification.style.animation = 'slideOut 0.3s forwards';
-                groupedNotification.removeTimeout = setTimeout(() => {
+                groupedNotification.removeTimeout = scheduleTrackedTimeout(() => {
                     if (group && groupedNotifications.get(group) !== groupedNotification) return;
                     if (notification.parentNode) {
                         notification.parentNode.removeChild(notification);
@@ -238,8 +308,8 @@
                     if (container.parentNode && container.childElementCount === 0) {
                         container.parentNode.removeChild(container);
                     }
-                }, 300);
-            }, group === 'combo' ? 5000 : 3000);
+                }, 300, CONFIG.uiTimerIds);
+            }, group === 'combo' ? 5000 : 3000, CONFIG.uiTimerIds);
         } catch (error) {
             console.error('Error showing notification:', error);
         }
@@ -355,13 +425,13 @@
             }
             // Reset combo timeout
             if (CONFIG.comboTimeoutId) clearTimeout(CONFIG.comboTimeoutId);
-            CONFIG.comboTimeoutId = setTimeout(() => {
+            CONFIG.comboTimeoutId = scheduleTrackedTimeout(() => {
                 if (CONFIG.stats.currentCombo > 0) {
                     CONFIG.stats.combos++;
                     showNotification(`Combo End: ${CONFIG.stats.currentCombo}x`, 'info', 'combo');
                     CONFIG.stats.currentCombo = 0;
                 }
-            }, MODES.combo.comboTimeout);
+            }, MODES.combo.comboTimeout, CONFIG.clickTimerIds);
         } else {
             if (CONFIG.stats.currentCombo > 0) {
                 CONFIG.stats.combos++;
@@ -393,7 +463,7 @@
                 <span style="color: #ff3b5c">Mode: ${MODES[CONFIG.mode].name}</span><br>
                 Runtime: ${runtime}s<br>
                 Total Clicks: ${CONFIG.stats.totalClicks}<br>
-                Success Rate: ${Math.round((CONFIG.stats.successfulClicks / CONFIG.stats.totalClicks) * 100 || 0)}%<br>
+                Local Dispatch Rate: ${Math.round((CONFIG.stats.successfulClicks / CONFIG.stats.totalClicks) * 100 || 0)}%<br>
                 Current Combo: <span style="color: #ff3b5c">${CONFIG.stats.currentCombo}x</span><br>
                 Max Combo: <span style="color: #ff3b5c">${CONFIG.stats.maxCombo}x</span><br>
                 Total Combos: ${CONFIG.stats.combos}<br>
@@ -402,37 +472,36 @@
         }
     }
 
-    // Optimized burst clicking for combo mode
+    function dispatchLikeClick(button) {
+        const clickEvent = new MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+            view: window
+        });
+        button.dispatchEvent(clickEvent);
+    }
+
+    function waitBetweenClicks(delay) {
+        return new Promise((resolve) => {
+            scheduleTrackedTimeout(resolve, delay, CONFIG.clickTimerIds);
+        });
+    }
+
+    // Combo clicks are deliberately sequential so burstDelay is respected.
     async function burstClick(button, count) {
-        const clicks = new Array(count).fill(null);
-        
-        try {
-            await Promise.all(clicks.map(async (_, index) => {
-                try {
-                    // Create and dispatch a custom mouse event
-                    const clickEvent = new MouseEvent('click', {
-                        bubbles: true,
-                        cancelable: true,
-                        view: window
-                    });
-                    button.dispatchEvent(clickEvent);
-                    
-                    CONFIG.stats.successfulClicks++;
-                    updateCombo(true);
-                    
-                    // Add minimal delay between clicks in burst
-                    await new Promise(r => setTimeout(r, MODES.combo.burstDelay));
-                } catch (error) {
-                    if (CONFIG.debugMode) {
-                        console.error(`Burst click error at index ${index}:`, error);
-                    }
-                    CONFIG.stats.failedClicks++;
-                    updateCombo(false);
+        for (let index = 0; index < count && CONFIG.enabled; index++) {
+            try {
+                dispatchLikeClick(button);
+                updateStats(true);
+            } catch (error) {
+                if (CONFIG.debugMode) {
+                    console.error(`Burst click error at index ${index}:`, error);
                 }
-            }));
-        } catch (error) {
-            if (CONFIG.debugMode) {
-                console.error('Burst sequence error:', error);
+                updateStats(false);
+            }
+
+            if (index < count - 1 && CONFIG.enabled) {
+                await waitBetweenClicks(MODES.combo.burstDelay);
             }
         }
     }
@@ -451,24 +520,21 @@
             if (CONFIG.mode === 'combo') {
                 await burstClick(likeButton, modeConfig.burstCount);
             } else {
-                // Use custom event dispatch for single clicks too
-                const clickEvent = new MouseEvent('click', {
-                    bubbles: true,
-                    cancelable: true,
-                    view: window
-                });
-                likeButton.dispatchEvent(clickEvent);
+                dispatchLikeClick(likeButton);
                 updateStats(true);
 
                 // Human Mode: occasional natural double-tap (2 clicks together),
                 // like when someone really likes a moment of the stream.
                 if (CONFIG.mode === 'human' && Math.random() < modeConfig.doubleTapChance) {
-                    setTimeout(() => {
-                        likeButton.dispatchEvent(new MouseEvent('click', {
-                            bubbles: true, cancelable: true, view: window
-                        }));
-                        updateStats(true);
-                    }, Math.floor(Math.random() * 90 + 40)); // 40-130ms gap
+                    scheduleTrackedTimeout(() => {
+                        if (!CONFIG.enabled) return;
+                        try {
+                            dispatchLikeClick(likeButton);
+                            updateStats(true);
+                        } catch (error) {
+                            updateStats(false);
+                        }
+                    }, Math.floor(Math.random() * 90 + 40), CONFIG.clickTimerIds); // 40-130ms gap
                 }
             }
             
@@ -492,7 +558,7 @@
             }
             
             if (CONFIG.enabled) {
-                setTimeout(clickLikeButton, delay);
+                scheduleTrackedTimeout(clickLikeButton, delay, CONFIG.clickTimerIds);
             }
         } catch (error) {
             if (CONFIG.debugMode) {
@@ -517,6 +583,7 @@
             showNotification(`Auto Liker: ON (${MODES[CONFIG.mode].name})`, 'success');
             clickLikeButton();
         } else {
+            clearTrackedTimers(CONFIG.clickTimerIds);
             showNotification('Auto Liker: OFF', 'warning');
         }
     }
@@ -535,17 +602,23 @@
     }
 
     // Enhanced keyboard controls
-    document.addEventListener('keydown', function(event) {
-        if (event.target.tagName.toLowerCase() !== 'input' && 
-            event.target.tagName.toLowerCase() !== 'textarea') {
-            
-            if (event.key.toLowerCase() === CONFIG.buttonKey) {
-                toggleAutoLiker();
-            } else if (event.key.toLowerCase() === 'm') {
-                switchMode();
+    function setupKeyboardControls() {
+        if (CONFIG.keyboardCleanup) return;
+
+        const handleKeydown = function(event) {
+            if (event.target.tagName.toLowerCase() !== 'input' &&
+                event.target.tagName.toLowerCase() !== 'textarea') {
+
+                if (event.key.toLowerCase() === CONFIG.buttonKey) {
+                    toggleAutoLiker();
+                } else if (event.key.toLowerCase() === 'm') {
+                    switchMode();
+                }
             }
-        }
-    });
+        };
+        document.addEventListener('keydown', handleKeydown);
+        CONFIG.keyboardCleanup = () => document.removeEventListener('keydown', handleKeydown);
+    }
 
     // Setup drag functionality
     function setupDrag(panel, handle) {
@@ -579,8 +652,8 @@
             handle.style.cursor = 'grab';
             
             // Save position
-            localStorage.setItem('autoLikerPosX', panel.style.left);
-            localStorage.setItem('autoLikerPosY', panel.style.top);
+            STORAGE.set('autoLikerPosX', panel.style.left);
+            STORAGE.set('autoLikerPosY', panel.style.top);
         };
 
         const drag = (e) => {
@@ -621,21 +694,35 @@
         document.addEventListener("mouseup", dragEnd, false);
         document.addEventListener("mousemove", drag, false);
 
+        const cleanup = () => {
+            handle.removeEventListener("touchstart", dragStart, false);
+            document.removeEventListener("touchend", dragEnd, false);
+            document.removeEventListener("touchmove", drag, false);
+            handle.removeEventListener("mousedown", dragStart, false);
+            document.removeEventListener("mouseup", dragEnd, false);
+            document.removeEventListener("mousemove", drag, false);
+        };
+
         // Load saved position
-        const savedX = localStorage.getItem('autoLikerPosX');
-        const savedY = localStorage.getItem('autoLikerPosY');
+        const savedX = readPosition('autoLikerPosX', null);
+        const savedY = readPosition('autoLikerPosY', null);
         if (savedX && savedY) {
             panel.style.left = savedX;
             panel.style.top = savedY;
             xOffset = parseInt(savedX);
             yOffset = parseInt(savedY);
         }
+
+        return cleanup;
     }
 
     // Setup collapse functionality
     function setupCollapse(panel, header, content) {
-        const collapseButton = document.createElement('div');
-        collapseButton.innerHTML = '▼';
+        const collapseButton = document.createElement('button');
+        collapseButton.type = 'button';
+        collapseButton.textContent = '▼';
+        collapseButton.setAttribute('aria-expanded', 'true');
+        collapseButton.setAttribute('aria-label', 'Collapse panel');
         collapseButton.style.cssText = `
             margin-left: 10px;
             font-size: 18px;
@@ -644,6 +731,8 @@
             transition: transform 0.3s ease;
             width: 24px;
             height: 24px;
+            padding: 0;
+            border: none;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -654,26 +743,28 @@
 
         let isCollapsed = false;
 
-        const toggleCollapse = () => {
-            isCollapsed = !isCollapsed;
+        const applyCollapseState = () => {
             content.style.maxHeight = isCollapsed ? '0' : '1000px';
             content.style.opacity = isCollapsed ? '0' : '1';
             content.style.overflow = isCollapsed ? 'hidden' : 'visible';
             collapseButton.style.transform = isCollapsed ? 'rotate(-180deg)' : '';
-            collapseButton.innerHTML = isCollapsed ? '▲' : '▼';
-            
-            // Save state
-            localStorage.setItem('autoLikerCollapsed', isCollapsed);
+            collapseButton.textContent = isCollapsed ? '▲' : '▼';
+            collapseButton.setAttribute('aria-expanded', String(!isCollapsed));
+            collapseButton.setAttribute('aria-label', isCollapsed ? 'Expand panel' : 'Collapse panel');
+        };
+
+        const toggleCollapse = () => {
+            isCollapsed = !isCollapsed;
+            applyCollapseState();
+            STORAGE.set('autoLikerCollapsed', String(isCollapsed));
         };
 
         collapseButton.addEventListener('click', toggleCollapse);
         header.appendChild(collapseButton);
 
         // Load saved state
-        const savedState = localStorage.getItem('autoLikerCollapsed');
-        if (savedState === 'true') {
-            toggleCollapse();
-        }
+        isCollapsed = STORAGE.get('autoLikerCollapsed') === 'true';
+        applyCollapseState();
 
         // Add transition styles
         content.style.transition = 'all 0.3s ease';
@@ -687,7 +778,7 @@
             if (CONFIG.debugMode) {
                 console.log('Document body not ready, retrying...');
             }
-            setTimeout(addControlPanel, 500);
+            scheduleTrackedTimeout(addControlPanel, 500, CONFIG.retryTimerIds);
             return;
         }
 
@@ -876,7 +967,7 @@
                 border-radius: 8px;
             `;
 
-            footer.innerHTML = `Version 0.1.0 | Made with ❤️<br>Maintained by joqtan<br>Based on AmpedWasTaken`;
+            footer.innerHTML = `Version 0.2.0 | Made with ❤️<br>Maintained by joqtan<br>Based on AmpedWasTaken`;
             footer.style.cssText = `
                 margin-top: 15px;
                 padding-top: 15px;
@@ -925,7 +1016,7 @@
                 event.preventDefault();
                 event.stopPropagation();
                 CONFIG.showNotifications = !CONFIG.showNotifications;
-                localStorage.setItem('autoLikerShowNotifications', String(CONFIG.showNotifications));
+                STORAGE.set('autoLikerShowNotifications', String(CONFIG.showNotifications));
                 updateNotificationButton();
             });
 
@@ -956,13 +1047,14 @@
                     filter: brightness(0.95);
                 }
             `;
+            style.id = 'tiktok-auto-liker-panel-style';
             document.head.appendChild(style);
 
             // Modify setupDrag to handle centered positioning
             const setupDragForPanel = () => {
                 // Load saved position or use center position
-                const savedX = localStorage.getItem('autoLikerPosX');
-                const savedY = localStorage.getItem('autoLikerPosY');
+                const savedX = readPosition('autoLikerPosX', null);
+                const savedY = readPosition('autoLikerPosY', null);
                 
                 if (savedX && savedY) {
                     // Remove centering transform and set saved position
@@ -972,7 +1064,7 @@
                 }
                 
                 // Setup drag functionality
-                setupDrag(panel, header);
+                CONFIG.dragCleanup = setupDrag(panel, header);
             };
 
             // Assemble the panel
@@ -995,36 +1087,65 @@
             document.body.appendChild(panel);
 
             // Wait for animation to complete before enabling drag
-            setTimeout(setupDragForPanel, 300);
+            scheduleTrackedTimeout(setupDragForPanel, 300, CONFIG.uiTimerIds);
 
             // Setup collapse functionality
             setupCollapse(panel, header, content);
 
             // Start stats update
-            setInterval(() => {
+            const statsInterval = setInterval(() => {
                 if (CONFIG.enabled) {
                     updateStatsDisplay(statsDiv);
                 }
             }, 1000);
+            CONFIG.uiIntervalIds.add(statsInterval);
 
         } catch (error) {
             console.error('Error assembling panel:', error);
         }
     }
 
+    function disposeAutoLiker() {
+        CONFIG.enabled = false;
+        clearAutoLikerTimers();
+        if (CONFIG.keyboardCleanup) {
+            CONFIG.keyboardCleanup();
+            CONFIG.keyboardCleanup = null;
+        }
+        if (CONFIG.dragCleanup) {
+            CONFIG.dragCleanup();
+            CONFIG.dragCleanup = null;
+        }
+        modeUIUpdater = null;
+        const panel = document.querySelector('#tiktok-auto-liker-panel');
+        if (panel) panel.remove();
+        const notifications = document.querySelector('#tiktok-auto-liker-notifications');
+        if (notifications) notifications.remove();
+        document.querySelector('#tiktok-auto-liker-panel-style')?.remove();
+        document.querySelector('#tiktok-auto-liker-bootstrap-style')?.remove();
+    }
+
     // Initialize with retry mechanism
+    let liveInitialized = false;
+    let bootstrapRetryTimer = null;
+    let bootstrapObserver = null;
+
     function initialize() {
         if (!document.body) {
             if (CONFIG.debugMode) {
                 console.log('Waiting for document body...');
             }
-            setTimeout(initialize, 500);
+            bootstrapRetryTimer = scheduleTrackedTimeout(initialize, 500, CONFIG.retryTimerIds);
             return;
         }
 
         if (window.location.pathname.includes('/live')) {
+            if (liveInitialized) return;
+            liveInitialized = true;
+            setupKeyboardControls();
             // Add CSS animations
             const style = document.createElement('style');
+            style.id = 'tiktok-auto-liker-bootstrap-style';
             style.textContent = `
                 @keyframes slideIn {
                     from { transform: translateX(100%); opacity: 0; }
@@ -1043,14 +1164,18 @@
             } catch (error) {
                 console.error('Error during initialization:', error);
                 // Retry initialization if it fails
-                setTimeout(initialize, 1000);
+                liveInitialized = false;
+                bootstrapRetryTimer = scheduleTrackedTimeout(initialize, 1000, CONFIG.retryTimerIds);
             }
+        } else if (liveInitialized) {
+            disposeAutoLiker();
+            liveInitialized = false;
         }
     }
 
     // URL change detection with safety check
     let lastUrl = location.href;
-    const observer = new MutationObserver(() => {
+    bootstrapObserver = new MutationObserver(() => {
         if (!document.body) return;
         
         const url = location.href;
@@ -1061,17 +1186,28 @@
     });
 
     // Start observing with error handling
+    function startBootstrapObserver() {
+        if (bootstrapObserver) {
+            bootstrapObserver.observe(document, { subtree: true, childList: true });
+        }
+    }
+
     try {
-        observer.observe(document, { subtree: true, childList: true });
+        startBootstrapObserver();
     } catch (error) {
         console.error('Error starting observer:', error);
     }
 
     // Wait for document to be ready
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initialize);
+        document.addEventListener('DOMContentLoaded', initialize, { once: true });
     } else {
         initialize();
     }
+
+    window.addEventListener('pagehide', () => {
+        disposeAutoLiker();
+        if (bootstrapObserver) bootstrapObserver.disconnect();
+    }, { once: true });
 
 })();

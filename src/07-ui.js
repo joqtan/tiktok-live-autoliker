@@ -13,6 +13,7 @@
             showNotification(`Auto Liker: ON (${MODES[CONFIG.mode].name})`, 'success');
             clickLikeButton();
         } else {
+            clearTrackedTimers(CONFIG.clickTimerIds);
             showNotification('Auto Liker: OFF', 'warning');
         }
     }
@@ -31,17 +32,23 @@
     }
 
     // Enhanced keyboard controls
-    document.addEventListener('keydown', function(event) {
-        if (event.target.tagName.toLowerCase() !== 'input' && 
-            event.target.tagName.toLowerCase() !== 'textarea') {
-            
-            if (event.key.toLowerCase() === CONFIG.buttonKey) {
-                toggleAutoLiker();
-            } else if (event.key.toLowerCase() === 'm') {
-                switchMode();
+    function setupKeyboardControls() {
+        if (CONFIG.keyboardCleanup) return;
+
+        const handleKeydown = function(event) {
+            if (event.target.tagName.toLowerCase() !== 'input' &&
+                event.target.tagName.toLowerCase() !== 'textarea') {
+
+                if (event.key.toLowerCase() === CONFIG.buttonKey) {
+                    toggleAutoLiker();
+                } else if (event.key.toLowerCase() === 'm') {
+                    switchMode();
+                }
             }
-        }
-    });
+        };
+        document.addEventListener('keydown', handleKeydown);
+        CONFIG.keyboardCleanup = () => document.removeEventListener('keydown', handleKeydown);
+    }
 
     // Setup drag functionality
     function setupDrag(panel, handle) {
@@ -75,8 +82,8 @@
             handle.style.cursor = 'grab';
             
             // Save position
-            localStorage.setItem('autoLikerPosX', panel.style.left);
-            localStorage.setItem('autoLikerPosY', panel.style.top);
+            STORAGE.set('autoLikerPosX', panel.style.left);
+            STORAGE.set('autoLikerPosY', panel.style.top);
         };
 
         const drag = (e) => {
@@ -117,21 +124,35 @@
         document.addEventListener("mouseup", dragEnd, false);
         document.addEventListener("mousemove", drag, false);
 
+        const cleanup = () => {
+            handle.removeEventListener("touchstart", dragStart, false);
+            document.removeEventListener("touchend", dragEnd, false);
+            document.removeEventListener("touchmove", drag, false);
+            handle.removeEventListener("mousedown", dragStart, false);
+            document.removeEventListener("mouseup", dragEnd, false);
+            document.removeEventListener("mousemove", drag, false);
+        };
+
         // Load saved position
-        const savedX = localStorage.getItem('autoLikerPosX');
-        const savedY = localStorage.getItem('autoLikerPosY');
+        const savedX = readPosition('autoLikerPosX', null);
+        const savedY = readPosition('autoLikerPosY', null);
         if (savedX && savedY) {
             panel.style.left = savedX;
             panel.style.top = savedY;
             xOffset = parseInt(savedX);
             yOffset = parseInt(savedY);
         }
+
+        return cleanup;
     }
 
     // Setup collapse functionality
     function setupCollapse(panel, header, content) {
-        const collapseButton = document.createElement('div');
-        collapseButton.innerHTML = '▼';
+        const collapseButton = document.createElement('button');
+        collapseButton.type = 'button';
+        collapseButton.textContent = '▼';
+        collapseButton.setAttribute('aria-expanded', 'true');
+        collapseButton.setAttribute('aria-label', 'Collapse panel');
         collapseButton.style.cssText = `
             margin-left: 10px;
             font-size: 18px;
@@ -140,6 +161,8 @@
             transition: transform 0.3s ease;
             width: 24px;
             height: 24px;
+            padding: 0;
+            border: none;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -150,26 +173,28 @@
 
         let isCollapsed = false;
 
-        const toggleCollapse = () => {
-            isCollapsed = !isCollapsed;
+        const applyCollapseState = () => {
             content.style.maxHeight = isCollapsed ? '0' : '1000px';
             content.style.opacity = isCollapsed ? '0' : '1';
             content.style.overflow = isCollapsed ? 'hidden' : 'visible';
             collapseButton.style.transform = isCollapsed ? 'rotate(-180deg)' : '';
-            collapseButton.innerHTML = isCollapsed ? '▲' : '▼';
-            
-            // Save state
-            localStorage.setItem('autoLikerCollapsed', isCollapsed);
+            collapseButton.textContent = isCollapsed ? '▲' : '▼';
+            collapseButton.setAttribute('aria-expanded', String(!isCollapsed));
+            collapseButton.setAttribute('aria-label', isCollapsed ? 'Expand panel' : 'Collapse panel');
+        };
+
+        const toggleCollapse = () => {
+            isCollapsed = !isCollapsed;
+            applyCollapseState();
+            STORAGE.set('autoLikerCollapsed', String(isCollapsed));
         };
 
         collapseButton.addEventListener('click', toggleCollapse);
         header.appendChild(collapseButton);
 
         // Load saved state
-        const savedState = localStorage.getItem('autoLikerCollapsed');
-        if (savedState === 'true') {
-            toggleCollapse();
-        }
+        isCollapsed = STORAGE.get('autoLikerCollapsed') === 'true';
+        applyCollapseState();
 
         // Add transition styles
         content.style.transition = 'all 0.3s ease';
@@ -183,7 +208,7 @@
             if (CONFIG.debugMode) {
                 console.log('Document body not ready, retrying...');
             }
-            setTimeout(addControlPanel, 500);
+            scheduleTrackedTimeout(addControlPanel, 500, CONFIG.retryTimerIds);
             return;
         }
 
@@ -372,7 +397,7 @@
                 border-radius: 8px;
             `;
 
-            footer.innerHTML = `Version 0.1.0 | Made with ❤️<br>Maintained by joqtan<br>Based on AmpedWasTaken`;
+            footer.innerHTML = `Version __AUTO_LIKER_VERSION__ | Made with ❤️<br>Maintained by joqtan<br>Based on AmpedWasTaken`;
             footer.style.cssText = `
                 margin-top: 15px;
                 padding-top: 15px;
@@ -421,7 +446,7 @@
                 event.preventDefault();
                 event.stopPropagation();
                 CONFIG.showNotifications = !CONFIG.showNotifications;
-                localStorage.setItem('autoLikerShowNotifications', String(CONFIG.showNotifications));
+                STORAGE.set('autoLikerShowNotifications', String(CONFIG.showNotifications));
                 updateNotificationButton();
             });
 
@@ -452,13 +477,14 @@
                     filter: brightness(0.95);
                 }
             `;
+            style.id = 'tiktok-auto-liker-panel-style';
             document.head.appendChild(style);
 
             // Modify setupDrag to handle centered positioning
             const setupDragForPanel = () => {
                 // Load saved position or use center position
-                const savedX = localStorage.getItem('autoLikerPosX');
-                const savedY = localStorage.getItem('autoLikerPosY');
+                const savedX = readPosition('autoLikerPosX', null);
+                const savedY = readPosition('autoLikerPosY', null);
                 
                 if (savedX && savedY) {
                     // Remove centering transform and set saved position
@@ -468,7 +494,7 @@
                 }
                 
                 // Setup drag functionality
-                setupDrag(panel, header);
+                CONFIG.dragCleanup = setupDrag(panel, header);
             };
 
             // Assemble the panel
@@ -491,19 +517,40 @@
             document.body.appendChild(panel);
 
             // Wait for animation to complete before enabling drag
-            setTimeout(setupDragForPanel, 300);
+            scheduleTrackedTimeout(setupDragForPanel, 300, CONFIG.uiTimerIds);
 
             // Setup collapse functionality
             setupCollapse(panel, header, content);
 
             // Start stats update
-            setInterval(() => {
+            const statsInterval = setInterval(() => {
                 if (CONFIG.enabled) {
                     updateStatsDisplay(statsDiv);
                 }
             }, 1000);
+            CONFIG.uiIntervalIds.add(statsInterval);
 
         } catch (error) {
             console.error('Error assembling panel:', error);
         }
+    }
+
+    function disposeAutoLiker() {
+        CONFIG.enabled = false;
+        clearAutoLikerTimers();
+        if (CONFIG.keyboardCleanup) {
+            CONFIG.keyboardCleanup();
+            CONFIG.keyboardCleanup = null;
+        }
+        if (CONFIG.dragCleanup) {
+            CONFIG.dragCleanup();
+            CONFIG.dragCleanup = null;
+        }
+        modeUIUpdater = null;
+        const panel = document.querySelector('#tiktok-auto-liker-panel');
+        if (panel) panel.remove();
+        const notifications = document.querySelector('#tiktok-auto-liker-notifications');
+        if (notifications) notifications.remove();
+        document.querySelector('#tiktok-auto-liker-panel-style')?.remove();
+        document.querySelector('#tiktok-auto-liker-bootstrap-style')?.remove();
     }

@@ -1,3 +1,41 @@
+    const STORAGE = (() => {
+        try {
+            const storage = window.localStorage;
+            return {
+                get(key) {
+                    try {
+                        return storage.getItem(key);
+                    } catch (error) {
+                        return null;
+                    }
+                },
+                set(key, value) {
+                    try {
+                        storage.setItem(key, value);
+                    } catch (error) {
+                        // Storage can be disabled or full; runtime behavior still works.
+                    }
+                }
+            };
+        } catch (error) {
+            return {
+                get() {
+                    return null;
+                },
+                set() {}
+            };
+        }
+    })();
+
+    function readPosition(key, fallback) {
+        const value = STORAGE.get(key);
+        if (value === 'auto' || /^-?\d+(?:\.\d+)?px$/.test(value || '') ||
+            /^\d+(?:\.\d+)?%$/.test(value || '')) {
+            return value;
+        }
+        return fallback;
+    }
+
     const CUSTOM_DELAY_LIMITS = {
         min: 10,
         max: 2000
@@ -9,7 +47,7 @@
 
     function loadCustomDelaySettings() {
         try {
-            const saved = JSON.parse(localStorage.getItem('autoLikerCustomDelays'));
+            const saved = JSON.parse(STORAGE.get('autoLikerCustomDelays'));
             if (!saved || !Number.isInteger(saved.min) || !Number.isInteger(saved.max) ||
                 saved.min < CUSTOM_DELAY_LIMITS.min || saved.max > CUSTOM_DELAY_LIMITS.max ||
                 saved.max < saved.min) {
@@ -24,7 +62,7 @@
 
     function saveCustomDelaySettings() {
         try {
-            localStorage.setItem('autoLikerCustomDelays', JSON.stringify(CONFIG.customDelay));
+            STORAGE.set('autoLikerCustomDelays', JSON.stringify(CONFIG.customDelay));
         } catch (error) {
             if (CONFIG.debugMode) {
                 console.warn('Unable to save custom delay settings:', error);
@@ -36,7 +74,7 @@
     const CONFIG = {
         enabled: false,
         buttonKey: 'l',
-        showNotifications: localStorage.getItem('autoLikerShowNotifications') !== 'false',
+        showNotifications: STORAGE.get('autoLikerShowNotifications') !== 'false',
         stats: {
             totalClicks: 0,
             startTime: null,
@@ -49,14 +87,46 @@
         mode: 'normal',
         customDelay: loadCustomDelaySettings(),
         comboTimeoutId: null,
+        clickTimerIds: new Set(),
+        uiTimerIds: new Set(),
+        uiIntervalIds: new Set(),
+        retryTimerIds: new Set(),
+        dragCleanup: null,
+        keyboardCleanup: null,
         lastClickTime: 0,
         debugMode: true,
         isCollapsed: false,
         position: {
-            x: localStorage.getItem('autoLikerPosX') || 'auto',
-            y: localStorage.getItem('autoLikerPosY') || '50%'
+            x: readPosition('autoLikerPosX', 'auto'),
+            y: readPosition('autoLikerPosY', '50%')
         }
     };
+
+    function scheduleTrackedTimeout(callback, delay, timerSet) {
+        const timerId = setTimeout(() => {
+            timerSet.delete(timerId);
+            callback();
+        }, delay);
+        timerSet.add(timerId);
+        return timerId;
+    }
+
+    function clearTrackedTimers(timerSet) {
+        timerSet.forEach((timerId) => clearTimeout(timerId));
+        timerSet.clear();
+    }
+
+    function clearAutoLikerTimers() {
+        clearTrackedTimers(CONFIG.clickTimerIds);
+        clearTrackedTimers(CONFIG.uiTimerIds);
+        clearTrackedTimers(CONFIG.retryTimerIds);
+        CONFIG.uiIntervalIds.forEach((timerId) => clearInterval(timerId));
+        CONFIG.uiIntervalIds.clear();
+        if (CONFIG.comboTimeoutId) {
+            clearTimeout(CONFIG.comboTimeoutId);
+            CONFIG.comboTimeoutId = null;
+        }
+    }
 
     // Mode configurations
     const MODES = {

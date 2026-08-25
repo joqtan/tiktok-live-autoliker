@@ -1,34 +1,33 @@
-    // Optimized burst clicking for combo mode
+    function dispatchLikeClick(button) {
+        const clickEvent = new MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+            view: window
+        });
+        button.dispatchEvent(clickEvent);
+    }
+
+    function waitBetweenClicks(delay) {
+        return new Promise((resolve) => {
+            scheduleTrackedTimeout(resolve, delay, CONFIG.clickTimerIds);
+        });
+    }
+
+    // Combo clicks are deliberately sequential so burstDelay is respected.
     async function burstClick(button, count) {
-        const clicks = new Array(count).fill(null);
-        
-        try {
-            await Promise.all(clicks.map(async (_, index) => {
-                try {
-                    // Create and dispatch a custom mouse event
-                    const clickEvent = new MouseEvent('click', {
-                        bubbles: true,
-                        cancelable: true,
-                        view: window
-                    });
-                    button.dispatchEvent(clickEvent);
-                    
-                    CONFIG.stats.successfulClicks++;
-                    updateCombo(true);
-                    
-                    // Add minimal delay between clicks in burst
-                    await new Promise(r => setTimeout(r, MODES.combo.burstDelay));
-                } catch (error) {
-                    if (CONFIG.debugMode) {
-                        console.error(`Burst click error at index ${index}:`, error);
-                    }
-                    CONFIG.stats.failedClicks++;
-                    updateCombo(false);
+        for (let index = 0; index < count && CONFIG.enabled; index++) {
+            try {
+                dispatchLikeClick(button);
+                updateStats(true);
+            } catch (error) {
+                if (CONFIG.debugMode) {
+                    console.error(`Burst click error at index ${index}:`, error);
                 }
-            }));
-        } catch (error) {
-            if (CONFIG.debugMode) {
-                console.error('Burst sequence error:', error);
+                updateStats(false);
+            }
+
+            if (index < count - 1 && CONFIG.enabled) {
+                await waitBetweenClicks(MODES.combo.burstDelay);
             }
         }
     }
@@ -47,24 +46,21 @@
             if (CONFIG.mode === 'combo') {
                 await burstClick(likeButton, modeConfig.burstCount);
             } else {
-                // Use custom event dispatch for single clicks too
-                const clickEvent = new MouseEvent('click', {
-                    bubbles: true,
-                    cancelable: true,
-                    view: window
-                });
-                likeButton.dispatchEvent(clickEvent);
+                dispatchLikeClick(likeButton);
                 updateStats(true);
 
                 // Human Mode: occasional natural double-tap (2 clicks together),
                 // like when someone really likes a moment of the stream.
                 if (CONFIG.mode === 'human' && Math.random() < modeConfig.doubleTapChance) {
-                    setTimeout(() => {
-                        likeButton.dispatchEvent(new MouseEvent('click', {
-                            bubbles: true, cancelable: true, view: window
-                        }));
-                        updateStats(true);
-                    }, Math.floor(Math.random() * 90 + 40)); // 40-130ms gap
+                    scheduleTrackedTimeout(() => {
+                        if (!CONFIG.enabled) return;
+                        try {
+                            dispatchLikeClick(likeButton);
+                            updateStats(true);
+                        } catch (error) {
+                            updateStats(false);
+                        }
+                    }, Math.floor(Math.random() * 90 + 40), CONFIG.clickTimerIds); // 40-130ms gap
                 }
             }
             
@@ -88,7 +84,7 @@
             }
             
             if (CONFIG.enabled) {
-                setTimeout(clickLikeButton, delay);
+                scheduleTrackedTimeout(clickLikeButton, delay, CONFIG.clickTimerIds);
             }
         } catch (error) {
             if (CONFIG.debugMode) {

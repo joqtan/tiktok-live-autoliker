@@ -69,10 +69,10 @@
                 if (group) groupedNotifications.set(group, groupedNotification);
             }
 
-            groupedNotification.hideTimeout = setTimeout(() => {
+            groupedNotification.hideTimeout = scheduleTrackedTimeout(() => {
                 if (group && groupedNotifications.get(group) !== groupedNotification) return;
                 notification.style.animation = 'slideOut 0.3s forwards';
-                groupedNotification.removeTimeout = setTimeout(() => {
+                groupedNotification.removeTimeout = scheduleTrackedTimeout(() => {
                     if (group && groupedNotifications.get(group) !== groupedNotification) return;
                     if (notification.parentNode) {
                         notification.parentNode.removeChild(notification);
@@ -81,8 +81,8 @@
                     if (container.parentNode && container.childElementCount === 0) {
                         container.parentNode.removeChild(container);
                     }
-                }, 300);
-            }, group === 'combo' ? 5000 : 3000);
+                }, 300, CONFIG.uiTimerIds);
+            }, group === 'combo' ? 5000 : 3000, CONFIG.uiTimerIds);
         } catch (error) {
             console.error('Error showing notification:', error);
         }
