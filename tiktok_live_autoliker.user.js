@@ -32,6 +32,40 @@
     - Performance optimization
     `);
 
+    const CUSTOM_DELAY_LIMITS = {
+        min: 10,
+        max: 2000
+    };
+    const CUSTOM_DELAY_DEFAULTS = {
+        min: 100,
+        max: 300
+    };
+
+    function loadCustomDelaySettings() {
+        try {
+            const saved = JSON.parse(localStorage.getItem('autoLikerCustomDelays'));
+            if (!saved || !Number.isInteger(saved.min) || !Number.isInteger(saved.max) ||
+                saved.min < CUSTOM_DELAY_LIMITS.min || saved.max > CUSTOM_DELAY_LIMITS.max ||
+                saved.max < saved.min) {
+                return { ...CUSTOM_DELAY_DEFAULTS };
+            }
+
+            return { min: saved.min, max: saved.max };
+        } catch (error) {
+            return { ...CUSTOM_DELAY_DEFAULTS };
+        }
+    }
+
+    function saveCustomDelaySettings() {
+        try {
+            localStorage.setItem('autoLikerCustomDelays', JSON.stringify(CONFIG.customDelay));
+        } catch (error) {
+            if (CONFIG.debugMode) {
+                console.warn('Unable to save custom delay settings:', error);
+            }
+        }
+    }
+
     // Configuration
     const CONFIG = {
         enabled: false,
@@ -47,6 +81,7 @@
             currentCombo: 0
         },
         mode: 'normal',
+        customDelay: loadCustomDelaySettings(),
         comboTimeoutId: null,
         lastClickTime: 0,
         debugMode: true,
@@ -98,6 +133,12 @@
             burstCount: 10,
             burstDelay: 5,
             comboTimeout: 800
+        },
+        custom: {
+            min: CONFIG.customDelay.min,
+            max: CONFIG.customDelay.max,
+            name: "Custom Mode",
+            burstCount: 1
         }
     };
 
@@ -405,7 +446,7 @@
         }
 
         try {
-            const modeConfig = MODES[CONFIG.mode];
+            const modeConfig = CONFIG.mode === 'custom' ? CONFIG.customDelay : MODES[CONFIG.mode];
             
             if (CONFIG.mode === 'combo') {
                 await burstClick(likeButton, modeConfig.burstCount);
@@ -481,10 +522,15 @@
     }
 
     // Mode switcher
+    let modeUIUpdater = null;
+
     function switchMode() {
         const modes = Object.keys(MODES);
         const currentIndex = modes.indexOf(CONFIG.mode);
         CONFIG.mode = modes[(currentIndex + 1) % modes.length];
+        if (modeUIUpdater) {
+            modeUIUpdater();
+        }
         showNotification(`Switched to ${MODES[CONFIG.mode].name}`, 'info');
     }
 
@@ -661,6 +707,11 @@
             const content = document.createElement('div');
             const toggleButton = document.createElement('button');
             const modeButton = document.createElement('button');
+            const customDelaySection = document.createElement('div');
+            const customMinSlider = document.createElement('input');
+            const customMaxSlider = document.createElement('input');
+            const customMinValue = document.createElement('span');
+            const customMaxValue = document.createElement('span');
             const notificationButton = document.createElement('button');
             const statsDiv = document.createElement('div');
             const footer = document.createElement('div');
@@ -749,6 +800,61 @@
                 transition: all 0.3s ease;
             `;
 
+            customDelaySection.style.cssText = `
+                margin-bottom: 10px;
+                padding: 10px;
+                background: #161823;
+                border-radius: 8px;
+            `;
+            customDelaySection.setAttribute('aria-label', 'Custom delay settings');
+
+            const customTitle = document.createElement('div');
+            customTitle.textContent = 'Custom delay range';
+            customTitle.style.cssText = 'font-size: 13px; font-weight: 600; margin-bottom: 8px; color: #25f4ee;';
+            customDelaySection.appendChild(customTitle);
+
+            const setupDelaySlider = (slider, label, valueDisplay, valueKey) => {
+                slider.type = 'range';
+                slider.min = String(CUSTOM_DELAY_LIMITS.min);
+                slider.max = String(CUSTOM_DELAY_LIMITS.max);
+                slider.step = '10';
+                slider.style.cssText = 'width: 100%; accent-color: #25f4ee; cursor: pointer;';
+
+                const row = document.createElement('label');
+                row.style.cssText = 'display: block; margin-bottom: 8px; font-size: 12px; color: rgba(255,255,255,0.85);';
+                const heading = document.createElement('div');
+                heading.style.cssText = 'display: flex; justify-content: space-between; margin-bottom: 4px;';
+                heading.append(label, valueDisplay);
+                row.append(heading, slider);
+                customDelaySection.appendChild(row);
+
+                slider.addEventListener('input', () => {
+                    const value = Number(slider.value);
+                    CONFIG.customDelay[valueKey] = value;
+                    if (valueKey === 'min' && value > CONFIG.customDelay.max) {
+                        CONFIG.customDelay.max = value;
+                        customMaxSlider.value = String(value);
+                    } else if (valueKey === 'max' && value < CONFIG.customDelay.min) {
+                        CONFIG.customDelay.min = value;
+                        customMinSlider.value = String(value);
+                    }
+                    customMinSlider.max = String(CONFIG.customDelay.max);
+                    customMaxSlider.min = String(CONFIG.customDelay.min);
+                    customMinValue.textContent = `${CONFIG.customDelay.min} ms`;
+                    customMaxValue.textContent = `${CONFIG.customDelay.max} ms`;
+                    MODES.custom.min = CONFIG.customDelay.min;
+                    MODES.custom.max = CONFIG.customDelay.max;
+                    saveCustomDelaySettings();
+                });
+            };
+
+            customMinSlider.value = String(CONFIG.customDelay.min);
+            customMaxSlider.value = String(CONFIG.customDelay.max);
+            customMinValue.textContent = `${CONFIG.customDelay.min} ms`;
+            customMaxValue.textContent = `${CONFIG.customDelay.max} ms`;
+            setupDelaySlider(customMinSlider, 'Minimum delay', customMinValue, 'min');
+            setupDelaySlider(customMaxSlider, 'Maximum delay', customMaxValue, 'max');
+
             notificationButton.type = 'button';
             notificationButton.style.cssText = `
                 width: 100%;
@@ -804,9 +910,15 @@
                 updateToggleButton();
             });
 
+            const updateModeUI = () => {
+                modeButton.textContent = `Current: ${MODES[CONFIG.mode].name}`;
+                customDelaySection.style.display = CONFIG.mode === 'custom' ? 'block' : 'none';
+            };
+            modeUIUpdater = updateModeUI;
+            updateModeUI();
+
             modeButton.onclick = () => {
                 switchMode();
-                modeButton.textContent = `Current: ${MODES[CONFIG.mode].name}`;
             };
 
             notificationButton.addEventListener('click', (event) => {
@@ -872,6 +984,7 @@
             
             content.appendChild(toggleButton);
             content.appendChild(modeButton);
+            content.appendChild(customDelaySection);
             content.appendChild(notificationButton);
             content.appendChild(statsDiv);
             content.appendChild(footer);

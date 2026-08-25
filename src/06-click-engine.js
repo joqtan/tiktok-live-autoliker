@@ -42,7 +42,7 @@
         }
 
         try {
-            const modeConfig = MODES[CONFIG.mode];
+            const modeConfig = CONFIG.mode === 'custom' ? CONFIG.customDelay : MODES[CONFIG.mode];
             
             if (CONFIG.mode === 'combo') {
                 await burstClick(likeButton, modeConfig.burstCount);

@@ -1,3 +1,37 @@
+    const CUSTOM_DELAY_LIMITS = {
+        min: 10,
+        max: 2000
+    };
+    const CUSTOM_DELAY_DEFAULTS = {
+        min: 100,
+        max: 300
+    };
+
+    function loadCustomDelaySettings() {
+        try {
+            const saved = JSON.parse(localStorage.getItem('autoLikerCustomDelays'));
+            if (!saved || !Number.isInteger(saved.min) || !Number.isInteger(saved.max) ||
+                saved.min < CUSTOM_DELAY_LIMITS.min || saved.max > CUSTOM_DELAY_LIMITS.max ||
+                saved.max < saved.min) {
+                return { ...CUSTOM_DELAY_DEFAULTS };
+            }
+
+            return { min: saved.min, max: saved.max };
+        } catch (error) {
+            return { ...CUSTOM_DELAY_DEFAULTS };
+        }
+    }
+
+    function saveCustomDelaySettings() {
+        try {
+            localStorage.setItem('autoLikerCustomDelays', JSON.stringify(CONFIG.customDelay));
+        } catch (error) {
+            if (CONFIG.debugMode) {
+                console.warn('Unable to save custom delay settings:', error);
+            }
+        }
+    }
+
     // Configuration
     const CONFIG = {
         enabled: false,
@@ -13,6 +47,7 @@
             currentCombo: 0
         },
         mode: 'normal',
+        customDelay: loadCustomDelaySettings(),
         comboTimeoutId: null,
         lastClickTime: 0,
         debugMode: true,
@@ -64,6 +99,12 @@
             burstCount: 10,
             burstDelay: 5,
             comboTimeout: 800
+        },
+        custom: {
+            min: CONFIG.customDelay.min,
+            max: CONFIG.customDelay.max,
+            name: "Custom Mode",
+            burstCount: 1
         }
     };
 

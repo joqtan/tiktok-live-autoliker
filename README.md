@@ -18,11 +18,12 @@ This fork keeps the original project's attribution and license while maintaining
 
 - Automatic liking on TikTok live stream pages.
 - Like-button detection using TikTok's `data-e2e="room-chat-like-btn"` anchor, with legacy class-based fallbacks.
-- Five modes: Normal, Turbo, Stealth, Human, and Combo.
+- Six modes: Normal, Turbo, Stealth, Human, Combo, and Custom.
 - Human Mode uses irregular delays, occasional double-taps, and short pauses instead of a fixed interval.
 - Combo Mode sends short bursts of clicks for combo-focused use.
+- Custom Mode provides minimum and maximum delay sliders, shown only while Custom Mode is active.
 - Draggable, collapsible control panel with a dark theme.
-- Panel position and collapsed state persisted in browser `localStorage`.
+- Panel position, collapsed state, and Custom Mode delay settings persisted in browser `localStorage`.
 - Live statistics for runtime, total clicks, success rate, current and maximum combo, completed combos, and clicks per second.
 - Keyboard shortcuts: `L` toggles the auto-liker and `M` cycles through modes.
 - Notifications for status changes, mode changes, and combo events.
@@ -41,8 +42,9 @@ The final artifact is a single installable userscript. It includes the ordered s
 1. Open a TikTok live stream in a supported desktop browser.
 2. Click **Start Auto-Liker** to begin and **Stop Auto-Liker** to stop.
 3. Click the mode button to cycle through the available modes.
-4. Drag the panel by its header or collapse it with the arrow control. The panel remembers those settings in the browser.
-5. Press `L` to toggle the auto-liker or `M` to switch modes when focus is not in a text input or textarea.
+4. Select **Custom Mode** to reveal the minimum and maximum delay sliders. Values are stored automatically in the browser and constrained to `10–2000 ms` with the minimum never exceeding the maximum.
+5. Drag the panel by its header or collapse it with the arrow control. The panel remembers those settings in the browser.
+6. Press `L` to toggle the auto-liker or `M` to switch modes when focus is not in a text input or textarea.
 
 The script only starts its liking loop after a visible like button is detected. Results can vary when TikTok changes its live-stream markup, browser behavior, or rate limits.
 
