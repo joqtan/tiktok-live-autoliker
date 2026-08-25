@@ -315,32 +315,53 @@
         }
     }
 
-    // Find the like button with complete structure
-    function findLikeButton() {
-        try {
-            // 1) Prefer the stable data-e2e anchor used by TikTok's own tests.
-            //    Pick the first visible instance (a hidden duplicate exists in
-            //    some layouts).
-            const e2eButtons = document.querySelectorAll(BUTTON_STRUCTURE.e2e);
-            for (const element of e2eButtons) {
-                const rect = element.getBoundingClientRect();
-                if (rect.width > 0 && rect.height > 0) {
+    let likeButtonRoot = null;
+
+    function getVisibleE2eButton(root) {
+        const e2eButtons = root.querySelectorAll(BUTTON_STRUCTURE.e2e);
+        for (const element of e2eButtons) {
+            const rect = element.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                return element;
+            }
+        }
+        return null;
+    }
+
+    function findLegacyLikeButton(root) {
+        for (const [key, className] of Object.entries(BUTTON_STRUCTURE)) {
+            if (key === 'e2e') continue;
+            const elements = root.getElementsByClassName(className);
+            for (const element of elements) {
+                if (isValidLikeButton(element)) {
                     return element;
                 }
             }
+        }
+        return null;
+    }
 
-            // 2) Fallback: try each legacy class-based part of the structure
-            for (const [key, className] of Object.entries(BUTTON_STRUCTURE)) {
-                if (key === 'e2e') continue;
-                const elements = document.getElementsByClassName(className);
-                for (const element of elements) {
-                    if (isValidLikeButton(element)) {
-                        return element;
-                    }
-                }
+    // Find the like button with the stable selector first. Legacy classes are
+    // only searched inside a root anchored by a stable button when possible.
+    function findLikeButton() {
+        try {
+            if (likeButtonRoot && !likeButtonRoot.isConnected) {
+                likeButtonRoot = null;
             }
 
-            return null;
+            const focusedRoot = likeButtonRoot || document;
+            let button = getVisibleE2eButton(focusedRoot);
+            if (!button && focusedRoot !== document) {
+                button = getVisibleE2eButton(document);
+            }
+            if (button) {
+                likeButtonRoot = button.closest(`.${BUTTON_STRUCTURE.container}`);
+                return button;
+            }
+
+            const legacyRoot = likeButtonRoot || document;
+            return findLegacyLikeButton(legacyRoot);
+
         } catch (error) {
             console.error('Error finding like button:', error);
             return null;
@@ -491,6 +512,13 @@
         });
     }
 
+    const MISSING_BUTTON_RETRY = {
+        initialDelay: 250,
+        maxDelay: 5000,
+        multiplier: 2
+    };
+    let missingButtonDelay = MISSING_BUTTON_RETRY.initialDelay;
+
     // Combo clicks are deliberately sequential so burstDelay is respected.
     async function burstClick(button, count) {
         for (let index = 0; index < count && CONFIG.enabled; index++) {
@@ -515,8 +543,14 @@
         const likeButton = findLikeButton();
         if (!likeButton) {
             updateStats(false);
+            scheduleTrackedTimeout(clickLikeButton, missingButtonDelay, CONFIG.clickTimerIds);
+            missingButtonDelay = Math.min(
+                missingButtonDelay * MISSING_BUTTON_RETRY.multiplier,
+                MISSING_BUTTON_RETRY.maxDelay
+            );
             return;
         }
+        missingButtonDelay = MISSING_BUTTON_RETRY.initialDelay;
 
         try {
             const modeConfig = CONFIG.mode === 'custom' ? CONFIG.customDelay : MODES[CONFIG.mode];
@@ -1131,7 +1165,7 @@
     // Initialize with retry mechanism
     let liveInitialized = false;
     let bootstrapRetryTimer = null;
-    let bootstrapObserver = null;
+    let bootstrapNavigationCleanup = null;
 
     function initialize() {
         if (!document.body) {
@@ -1176,30 +1210,49 @@
         }
     }
 
-    // URL change detection with safety check
-    let lastUrl = location.href;
-    bootstrapObserver = new MutationObserver(() => {
-        if (!document.body) return;
-        
-        const url = location.href;
-        if (url !== lastUrl) {
+    // URL change detection uses explicit SPA navigation signals instead of a
+    // document-wide observer that reacts to unrelated DOM mutations.
+    function startBootstrapNavigation() {
+        if (bootstrapNavigationCleanup) return;
+
+        let lastUrl = location.href;
+        const handleNavigation = () => {
+            const url = location.href;
+            if (url === lastUrl) return;
             lastUrl = url;
             initialize();
-        }
-    });
+        };
 
-    // Start observing with error handling
-    function startBootstrapObserver() {
-        if (bootstrapObserver) {
-            bootstrapObserver.observe(document, { subtree: true, childList: true });
-        }
+        const originalPushState = history.pushState;
+        const originalReplaceState = history.replaceState;
+        const patchedPushState = function(...args) {
+            const result = originalPushState.apply(this, args);
+            handleNavigation();
+            return result;
+        };
+        const patchedReplaceState = function(...args) {
+            const result = originalReplaceState.apply(this, args);
+            handleNavigation();
+            return result;
+        };
+
+        history.pushState = patchedPushState;
+        history.replaceState = patchedReplaceState;
+        window.addEventListener('popstate', handleNavigation);
+
+        bootstrapNavigationCleanup = () => {
+            window.removeEventListener('popstate', handleNavigation);
+            if (history.pushState === patchedPushState) {
+                history.pushState = originalPushState;
+            }
+            if (history.replaceState === patchedReplaceState) {
+                history.replaceState = originalReplaceState;
+            }
+            bootstrapNavigationCleanup = null;
+        };
     }
 
-    try {
-        startBootstrapObserver();
-    } catch (error) {
-        console.error('Error starting observer:', error);
-    }
+    startBootstrapNavigation();
 
     // Wait for document to be ready
     if (document.readyState === 'loading') {
@@ -1210,7 +1263,7 @@
 
     window.addEventListener('pagehide', () => {
         disposeAutoLiker();
-        if (bootstrapObserver) bootstrapObserver.disconnect();
+        if (bootstrapNavigationCleanup) bootstrapNavigationCleanup();
     }, { once: true });
 
 })();

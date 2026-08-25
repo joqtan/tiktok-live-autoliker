@@ -13,6 +13,13 @@
         });
     }
 
+    const MISSING_BUTTON_RETRY = {
+        initialDelay: 250,
+        maxDelay: 5000,
+        multiplier: 2
+    };
+    let missingButtonDelay = MISSING_BUTTON_RETRY.initialDelay;
+
     // Combo clicks are deliberately sequential so burstDelay is respected.
     async function burstClick(button, count) {
         for (let index = 0; index < count && CONFIG.enabled; index++) {
@@ -37,8 +44,14 @@
         const likeButton = findLikeButton();
         if (!likeButton) {
             updateStats(false);
+            scheduleTrackedTimeout(clickLikeButton, missingButtonDelay, CONFIG.clickTimerIds);
+            missingButtonDelay = Math.min(
+                missingButtonDelay * MISSING_BUTTON_RETRY.multiplier,
+                MISSING_BUTTON_RETRY.maxDelay
+            );
             return;
         }
+        missingButtonDelay = MISSING_BUTTON_RETRY.initialDelay;
 
         try {
             const modeConfig = CONFIG.mode === 'custom' ? CONFIG.customDelay : MODES[CONFIG.mode];

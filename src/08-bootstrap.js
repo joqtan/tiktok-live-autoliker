@@ -1,7 +1,7 @@
     // Initialize with retry mechanism
     let liveInitialized = false;
     let bootstrapRetryTimer = null;
-    let bootstrapObserver = null;
+    let bootstrapNavigationCleanup = null;
 
     function initialize() {
         if (!document.body) {
@@ -46,30 +46,49 @@
         }
     }
 
-    // URL change detection with safety check
-    let lastUrl = location.href;
-    bootstrapObserver = new MutationObserver(() => {
-        if (!document.body) return;
-        
-        const url = location.href;
-        if (url !== lastUrl) {
+    // URL change detection uses explicit SPA navigation signals instead of a
+    // document-wide observer that reacts to unrelated DOM mutations.
+    function startBootstrapNavigation() {
+        if (bootstrapNavigationCleanup) return;
+
+        let lastUrl = location.href;
+        const handleNavigation = () => {
+            const url = location.href;
+            if (url === lastUrl) return;
             lastUrl = url;
             initialize();
-        }
-    });
+        };
 
-    // Start observing with error handling
-    function startBootstrapObserver() {
-        if (bootstrapObserver) {
-            bootstrapObserver.observe(document, { subtree: true, childList: true });
-        }
+        const originalPushState = history.pushState;
+        const originalReplaceState = history.replaceState;
+        const patchedPushState = function(...args) {
+            const result = originalPushState.apply(this, args);
+            handleNavigation();
+            return result;
+        };
+        const patchedReplaceState = function(...args) {
+            const result = originalReplaceState.apply(this, args);
+            handleNavigation();
+            return result;
+        };
+
+        history.pushState = patchedPushState;
+        history.replaceState = patchedReplaceState;
+        window.addEventListener('popstate', handleNavigation);
+
+        bootstrapNavigationCleanup = () => {
+            window.removeEventListener('popstate', handleNavigation);
+            if (history.pushState === patchedPushState) {
+                history.pushState = originalPushState;
+            }
+            if (history.replaceState === patchedReplaceState) {
+                history.replaceState = originalReplaceState;
+            }
+            bootstrapNavigationCleanup = null;
+        };
     }
 
-    try {
-        startBootstrapObserver();
-    } catch (error) {
-        console.error('Error starting observer:', error);
-    }
+    startBootstrapNavigation();
 
     // Wait for document to be ready
     if (document.readyState === 'loading') {
@@ -80,5 +99,5 @@
 
     window.addEventListener('pagehide', () => {
         disposeAutoLiker();
-        if (bootstrapObserver) bootstrapObserver.disconnect();
+        if (bootstrapNavigationCleanup) bootstrapNavigationCleanup();
     }, { once: true });
