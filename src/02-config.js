@@ -2,7 +2,7 @@
     const CONFIG = {
         enabled: false,
         buttonKey: 'l',
-        showNotifications: true,
+        showNotifications: localStorage.getItem('autoLikerShowNotifications') !== 'false',
         stats: {
             totalClicks: 0,
             startTime: null,

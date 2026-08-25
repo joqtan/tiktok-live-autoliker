@@ -8,9 +8,6 @@
             for (const element of e2eButtons) {
                 const rect = element.getBoundingClientRect();
                 if (rect.width > 0 && rect.height > 0) {
-                    if (CONFIG.debugMode) {
-                        console.log('Found like button (e2e):', element);
-                    }
                     return element;
                 }
             }
@@ -21,17 +18,11 @@
                 const elements = document.getElementsByClassName(className);
                 for (const element of elements) {
                     if (isValidLikeButton(element)) {
-                        if (CONFIG.debugMode) {
-                            console.log(`Found like button (${key}):`, element);
-                        }
                         return element;
                     }
                 }
             }
 
-            if (CONFIG.debugMode) {
-                console.log('Like button not found');
-            }
             return null;
         } catch (error) {
             console.error('Error finding like button:', error);

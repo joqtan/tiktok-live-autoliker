@@ -4,14 +4,14 @@
             CONFIG.stats.currentCombo++;
             if (CONFIG.stats.currentCombo > CONFIG.stats.maxCombo) {
                 CONFIG.stats.maxCombo = CONFIG.stats.currentCombo;
-                showNotification(`🔥 New Max Combo: ${CONFIG.stats.maxCombo}!`, 'success');
+                showNotification(`🔥 New Max Combo: ${CONFIG.stats.maxCombo}!`, 'success', 'combo');
             }
             // Reset combo timeout
             if (CONFIG.comboTimeoutId) clearTimeout(CONFIG.comboTimeoutId);
             CONFIG.comboTimeoutId = setTimeout(() => {
                 if (CONFIG.stats.currentCombo > 0) {
                     CONFIG.stats.combos++;
-                    showNotification(`Combo End: ${CONFIG.stats.currentCombo}x`, 'info');
+                    showNotification(`Combo End: ${CONFIG.stats.currentCombo}x`, 'info', 'combo');
                     CONFIG.stats.currentCombo = 0;
                 }
             }, MODES.combo.comboTimeout);
@@ -33,24 +33,6 @@
             updateCombo(false);
         }
 
-        const runtime = CONFIG.stats.startTime ?
-            Math.round((Date.now() - CONFIG.stats.startTime) / 1000) : 0;
-
-        const clicksPerSecond = runtime > 0 ?
-            (CONFIG.stats.successfulClicks / runtime).toFixed(2) : 0;
-
-        console.log(`
-        📊 Auto Liker Stats:
-        ▶ Runtime: ${runtime}s
-        ❤ Total Clicks: ${CONFIG.stats.totalClicks}
-        ✅ Successful: ${CONFIG.stats.successfulClicks}
-        ❌ Failed: ${CONFIG.stats.failedClicks}
-        🔥 Current Combo: ${CONFIG.stats.currentCombo}x
-        🏆 Max Combo: ${CONFIG.stats.maxCombo}x
-        🎯 Total Combos: ${CONFIG.stats.combos}
-        ⚡ Clicks/sec: ${clicksPerSecond}
-        🔄 Mode: ${MODES[CONFIG.mode].name}
-        `);
     }
 
     // Update the stats display in the control panel

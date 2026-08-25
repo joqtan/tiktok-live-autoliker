@@ -198,6 +198,7 @@
             const content = document.createElement('div');
             const toggleButton = document.createElement('button');
             const modeButton = document.createElement('button');
+            const notificationButton = document.createElement('button');
             const statsDiv = document.createElement('div');
             const footer = document.createElement('div');
 
@@ -285,6 +286,19 @@
                 transition: all 0.3s ease;
             `;
 
+            notificationButton.type = 'button';
+            notificationButton.style.cssText = `
+                width: 100%;
+                padding: 10px;
+                margin-bottom: 10px;
+                border: none;
+                border-radius: 8px;
+                color: white;
+                cursor: pointer;
+                font-weight: 600;
+                transition: all 0.3s ease;
+            `;
+
             statsDiv.style.cssText = `
                 font-size: 13px;
                 margin-top: 10px;
@@ -309,6 +323,17 @@
                 toggleButton.style.background = CONFIG.enabled ? '#fe2c55' : '#ff3b5c';
             };
 
+            const updateNotificationButton = () => {
+                const state = CONFIG.showNotifications ? 'On' : 'Off';
+                notificationButton.textContent = `Notifications: ${state}`;
+                notificationButton.setAttribute('aria-pressed', String(CONFIG.showNotifications));
+                notificationButton.setAttribute('aria-label', `Notifications ${state}`);
+                notificationButton.style.background = CONFIG.showNotifications ? '#25f4ee' : '#555';
+                notificationButton.style.color = CONFIG.showNotifications ? '#161823' : 'white';
+            };
+
+            updateNotificationButton();
+
             toggleButton.addEventListener('click', (event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -320,6 +345,14 @@
                 switchMode();
                 modeButton.textContent = `Current: ${MODES[CONFIG.mode].name}`;
             };
+
+            notificationButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                CONFIG.showNotifications = !CONFIG.showNotifications;
+                localStorage.setItem('autoLikerShowNotifications', String(CONFIG.showNotifications));
+                updateNotificationButton();
+            });
 
             // Add fade-in animation
             const style = document.createElement('style');
@@ -376,6 +409,7 @@
             
             content.appendChild(toggleButton);
             content.appendChild(modeButton);
+            content.appendChild(notificationButton);
             content.appendChild(statsDiv);
             content.appendChild(footer);
             

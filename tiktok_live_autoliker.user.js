@@ -36,7 +36,7 @@
     const CONFIG = {
         enabled: false,
         buttonKey: 'l',
-        showNotifications: true,
+        showNotifications: localStorage.getItem('autoLikerShowNotifications') !== 'false',
         stats: {
             totalClicks: 0,
             startTime: null,
@@ -115,45 +115,90 @@
     };
 
     // Notification system with safety checks
-    function showNotification(message, type = 'info') {
+    const groupedNotifications = new Map();
+
+    function showNotification(message, type = 'info', group = null) {
         if (!CONFIG.showNotifications) return;
         if (!document.body) return;  // Safety check
-        
-        const notification = document.createElement('div');
+
         const colors = {
             info: '#2196F3',
             success: '#4CAF50',
             warning: '#FFC107',
             error: '#F44336'
         };
+
+        let container = document.querySelector('#tiktok-auto-liker-notifications');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'tiktok-auto-liker-notifications';
+            container.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                z-index: 999998;
+                pointer-events: none;
+            `;
+            document.body.appendChild(container);
+        }
+
+        let groupedNotification = group ? groupedNotifications.get(group) : null;
+        let notification;
+
+        if (groupedNotification) {
+            clearTimeout(groupedNotification.hideTimeout);
+            clearTimeout(groupedNotification.removeTimeout);
+            notification = groupedNotification.notification;
+            notification.textContent = message;
+            notification.style.borderLeftColor = colors[type];
+        } else {
+            notification = document.createElement('div');
+        }
         
-        notification.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: rgba(0, 0, 0, 0.9);
-            color: white;
-            padding: 12px 24px;
-            border-radius: 8px;
-            z-index: 999999;
-            font-family: Arial, sans-serif;
-            border-left: 4px solid ${colors[type]};
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            animation: slideIn 0.3s forwards;
-        `;
-        notification.textContent = message;
+        if (!groupedNotification) {
+            notification.style.cssText = `
+                background: rgba(0, 0, 0, 0.9);
+                color: white;
+                padding: 12px 24px;
+                border-radius: 8px;
+                font-family: Arial, sans-serif;
+                border-left: 4px solid ${colors[type]};
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                animation: slideIn 0.3s forwards;
+                pointer-events: auto;
+            `;
+            notification.textContent = message;
+        }
         
         // Safe append
         try {
-            document.body.appendChild(notification);
-            setTimeout(() => {
+            if (!groupedNotification) {
+                container.appendChild(notification);
+                groupedNotification = {
+                    notification,
+                    hideTimeout: null,
+                    removeTimeout: null
+                };
+                if (group) groupedNotifications.set(group, groupedNotification);
+            }
+
+            groupedNotification.hideTimeout = setTimeout(() => {
+                if (group && groupedNotifications.get(group) !== groupedNotification) return;
                 notification.style.animation = 'slideOut 0.3s forwards';
-                setTimeout(() => {
+                groupedNotification.removeTimeout = setTimeout(() => {
+                    if (group && groupedNotifications.get(group) !== groupedNotification) return;
                     if (notification.parentNode) {
                         notification.parentNode.removeChild(notification);
                     }
+                    if (group) groupedNotifications.delete(group);
+                    if (container.parentNode && container.childElementCount === 0) {
+                        container.parentNode.removeChild(container);
+                    }
                 }, 300);
-            }, 3000);
+            }, group === 'combo' ? 5000 : 3000);
         } catch (error) {
             console.error('Error showing notification:', error);
         }
@@ -169,9 +214,6 @@
             for (const element of e2eButtons) {
                 const rect = element.getBoundingClientRect();
                 if (rect.width > 0 && rect.height > 0) {
-                    if (CONFIG.debugMode) {
-                        console.log('Found like button (e2e):', element);
-                    }
                     return element;
                 }
             }
@@ -182,17 +224,11 @@
                 const elements = document.getElementsByClassName(className);
                 for (const element of elements) {
                     if (isValidLikeButton(element)) {
-                        if (CONFIG.debugMode) {
-                            console.log(`Found like button (${key}):`, element);
-                        }
                         return element;
                     }
                 }
             }
 
-            if (CONFIG.debugMode) {
-                console.log('Like button not found');
-            }
             return null;
         } catch (error) {
             console.error('Error finding like button:', error);
@@ -274,14 +310,14 @@
             CONFIG.stats.currentCombo++;
             if (CONFIG.stats.currentCombo > CONFIG.stats.maxCombo) {
                 CONFIG.stats.maxCombo = CONFIG.stats.currentCombo;
-                showNotification(`🔥 New Max Combo: ${CONFIG.stats.maxCombo}!`, 'success');
+                showNotification(`🔥 New Max Combo: ${CONFIG.stats.maxCombo}!`, 'success', 'combo');
             }
             // Reset combo timeout
             if (CONFIG.comboTimeoutId) clearTimeout(CONFIG.comboTimeoutId);
             CONFIG.comboTimeoutId = setTimeout(() => {
                 if (CONFIG.stats.currentCombo > 0) {
                     CONFIG.stats.combos++;
-                    showNotification(`Combo End: ${CONFIG.stats.currentCombo}x`, 'info');
+                    showNotification(`Combo End: ${CONFIG.stats.currentCombo}x`, 'info', 'combo');
                     CONFIG.stats.currentCombo = 0;
                 }
             }, MODES.combo.comboTimeout);
@@ -303,24 +339,6 @@
             updateCombo(false);
         }
 
-        const runtime = CONFIG.stats.startTime ?
-            Math.round((Date.now() - CONFIG.stats.startTime) / 1000) : 0;
-
-        const clicksPerSecond = runtime > 0 ?
-            (CONFIG.stats.successfulClicks / runtime).toFixed(2) : 0;
-
-        console.log(`
-        📊 Auto Liker Stats:
-        ▶ Runtime: ${runtime}s
-        ❤ Total Clicks: ${CONFIG.stats.totalClicks}
-        ✅ Successful: ${CONFIG.stats.successfulClicks}
-        ❌ Failed: ${CONFIG.stats.failedClicks}
-        🔥 Current Combo: ${CONFIG.stats.currentCombo}x
-        🏆 Max Combo: ${CONFIG.stats.maxCombo}x
-        🎯 Total Combos: ${CONFIG.stats.combos}
-        ⚡ Clicks/sec: ${clicksPerSecond}
-        🔄 Mode: ${MODES[CONFIG.mode].name}
-        `);
     }
 
     // Update the stats display in the control panel
@@ -643,6 +661,7 @@
             const content = document.createElement('div');
             const toggleButton = document.createElement('button');
             const modeButton = document.createElement('button');
+            const notificationButton = document.createElement('button');
             const statsDiv = document.createElement('div');
             const footer = document.createElement('div');
 
@@ -730,6 +749,19 @@
                 transition: all 0.3s ease;
             `;
 
+            notificationButton.type = 'button';
+            notificationButton.style.cssText = `
+                width: 100%;
+                padding: 10px;
+                margin-bottom: 10px;
+                border: none;
+                border-radius: 8px;
+                color: white;
+                cursor: pointer;
+                font-weight: 600;
+                transition: all 0.3s ease;
+            `;
+
             statsDiv.style.cssText = `
                 font-size: 13px;
                 margin-top: 10px;
@@ -754,6 +786,17 @@
                 toggleButton.style.background = CONFIG.enabled ? '#fe2c55' : '#ff3b5c';
             };
 
+            const updateNotificationButton = () => {
+                const state = CONFIG.showNotifications ? 'On' : 'Off';
+                notificationButton.textContent = `Notifications: ${state}`;
+                notificationButton.setAttribute('aria-pressed', String(CONFIG.showNotifications));
+                notificationButton.setAttribute('aria-label', `Notifications ${state}`);
+                notificationButton.style.background = CONFIG.showNotifications ? '#25f4ee' : '#555';
+                notificationButton.style.color = CONFIG.showNotifications ? '#161823' : 'white';
+            };
+
+            updateNotificationButton();
+
             toggleButton.addEventListener('click', (event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -765,6 +808,14 @@
                 switchMode();
                 modeButton.textContent = `Current: ${MODES[CONFIG.mode].name}`;
             };
+
+            notificationButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                CONFIG.showNotifications = !CONFIG.showNotifications;
+                localStorage.setItem('autoLikerShowNotifications', String(CONFIG.showNotifications));
+                updateNotificationButton();
+            });
 
             // Add fade-in animation
             const style = document.createElement('style');
@@ -821,6 +872,7 @@
             
             content.appendChild(toggleButton);
             content.appendChild(modeButton);
+            content.appendChild(notificationButton);
             content.appendChild(statsDiv);
             content.appendChild(footer);
             
