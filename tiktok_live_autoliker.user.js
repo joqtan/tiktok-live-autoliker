@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         TikTok Live Auto Liker Pro
+// @name         TikTok Live AutoLiker
 // @namespace    http://tampermonkey.net/
-// @version      2.7.1
+// @version      0.1.0
 // @description  Advanced auto-liker for TikTok live streams with ultra-fast combo mode
-// @author       Amped
+// @author       joqtan
 // @match        https://www.tiktok.com/*
 // @grant        none
 // @run-at       document-end
@@ -21,8 +21,9 @@
        ██║   ██║██║  ██╗   ██║   ╚██████╔╝██║  ██╗    ███████╗██║██║  ██╗███████╗██║  ██║
        ╚═╝   ╚═╝╚═╝  ╚═╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝    ╚══════╝╚═╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
                                                                                            
-    TikTok Live Auto Liker Pro v2.7.1
-    Created by Amped
+    TikTok Live AutoLiker v0.1.0
+    Maintained by joqtan
+    Based on the original work by AmpedWasTaken
     Enhanced Features:
     - Ultra-fast combo mode
     - Multi-mode liking system
@@ -76,6 +77,20 @@
             name: "🕵️ Stealth Mode",
             burstCount: 1
         },
+        human: {
+            // Human Mode: irregular, organic delay (base + jitter) with
+            // occasional natural double-taps and a short breather to avoid a
+            // mechanical pattern, without long dead gaps. Roughly ~1 like every
+            // 0.35-0.6s on average.
+            baseDelay: 400,
+            jitterMin: 200,
+            jitterMax: 500,
+            doubleTapChance: 0.25,
+            pauseChance: 0.06,
+            pauseDuration: 850,
+            name: "👤 Human Mode",
+            burstCount: 1
+        },
         combo: {
             min: 5,
             max: 15,
@@ -87,7 +102,12 @@
     };
 
     // Button structure
+    // NOTE: TikTok's hashed class names (e1tv929b*) rotate frequently and were
+    // removed entirely. The stable anchor is the data-e2e attribute used by
+    // TikTok's own E2E tests. The legacy class-based selectors are kept only as
+    // a fallback in case the DOM shifts again.
     const BUTTON_STRUCTURE = {
+        e2e: '[data-e2e="room-chat-like-btn"]',
         container: 'tiktok-1f32i2v e1tv929b0',
         outer: 'tiktok-yl9fg8 e1tv929b1',
         middle: 'tiktok-pn4agh e1tv929b2',
@@ -142,8 +162,23 @@
     // Find the like button with complete structure
     function findLikeButton() {
         try {
-            // Try each part of the button structure
+            // 1) Prefer the stable data-e2e anchor used by TikTok's own tests.
+            //    Pick the first visible instance (a hidden duplicate exists in
+            //    some layouts).
+            const e2eButtons = document.querySelectorAll(BUTTON_STRUCTURE.e2e);
+            for (const element of e2eButtons) {
+                const rect = element.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0) {
+                    if (CONFIG.debugMode) {
+                        console.log('Found like button (e2e):', element);
+                    }
+                    return element;
+                }
+            }
+
+            // 2) Fallback: try each legacy class-based part of the structure
             for (const [key, className] of Object.entries(BUTTON_STRUCTURE)) {
+                if (key === 'e2e') continue;
                 const elements = document.getElementsByClassName(className);
                 for (const element of elements) {
                     if (isValidLikeButton(element)) {
@@ -257,6 +292,56 @@
             CONFIG.stats.currentCombo = 0;
         }
     }
+    // Enhanced statistics tracking with combo stats
+    function updateStats(success = true) {
+        CONFIG.stats.totalClicks++;
+        if (success) {
+            CONFIG.stats.successfulClicks++;
+            updateCombo(true);
+        } else {
+            CONFIG.stats.failedClicks++;
+            updateCombo(false);
+        }
+
+        const runtime = CONFIG.stats.startTime ?
+            Math.round((Date.now() - CONFIG.stats.startTime) / 1000) : 0;
+
+        const clicksPerSecond = runtime > 0 ?
+            (CONFIG.stats.successfulClicks / runtime).toFixed(2) : 0;
+
+        console.log(`
+        📊 Auto Liker Stats:
+        ▶ Runtime: ${runtime}s
+        ❤ Total Clicks: ${CONFIG.stats.totalClicks}
+        ✅ Successful: ${CONFIG.stats.successfulClicks}
+        ❌ Failed: ${CONFIG.stats.failedClicks}
+        🔥 Current Combo: ${CONFIG.stats.currentCombo}x
+        🏆 Max Combo: ${CONFIG.stats.maxCombo}x
+        🎯 Total Combos: ${CONFIG.stats.combos}
+        ⚡ Clicks/sec: ${clicksPerSecond}
+        🔄 Mode: ${MODES[CONFIG.mode].name}
+        `);
+    }
+
+    // Update the stats display in the control panel
+    function updateStatsDisplay(statsDiv) {
+        if (CONFIG.enabled) {
+            const runtime = Math.round((Date.now() - CONFIG.stats.startTime) / 1000);
+            const clicksPerSecond = runtime > 0 ?
+                (CONFIG.stats.successfulClicks / runtime).toFixed(2) : 0;
+
+            statsDiv.innerHTML = `
+                <span style="color: #ff3b5c">Mode: ${MODES[CONFIG.mode].name}</span><br>
+                Runtime: ${runtime}s<br>
+                Total Clicks: ${CONFIG.stats.totalClicks}<br>
+                Success Rate: ${Math.round((CONFIG.stats.successfulClicks / CONFIG.stats.totalClicks) * 100 || 0)}%<br>
+                Current Combo: <span style="color: #ff3b5c">${CONFIG.stats.currentCombo}x</span><br>
+                Max Combo: <span style="color: #ff3b5c">${CONFIG.stats.maxCombo}x</span><br>
+                Total Combos: ${CONFIG.stats.combos}<br>
+                Clicks/sec: ${clicksPerSecond}
+            `;
+        }
+    }
 
     // Optimized burst clicking for combo mode
     async function burstClick(button, count) {
@@ -315,13 +400,37 @@
                 });
                 likeButton.dispatchEvent(clickEvent);
                 updateStats(true);
+
+                // Human Mode: occasional natural double-tap (2 clicks together),
+                // like when someone really likes a moment of the stream.
+                if (CONFIG.mode === 'human' && Math.random() < modeConfig.doubleTapChance) {
+                    setTimeout(() => {
+                        likeButton.dispatchEvent(new MouseEvent('click', {
+                            bubbles: true, cancelable: true, view: window
+                        }));
+                        updateStats(true);
+                    }, Math.floor(Math.random() * 90 + 40)); // 40-130ms gap
+                }
             }
             
             const now = Date.now();
             CONFIG.lastClickTime = now;
 
-            const delay = Math.floor(Math.random() * 
-                (modeConfig.max - modeConfig.min) + modeConfig.min);
+            let delay;
+            if (CONFIG.mode === 'human') {
+                // Irregular human delay: base + jitter, with occasional short
+                // breather to break the mechanical pattern.
+                if (Math.random() < modeConfig.pauseChance) {
+                    delay = modeConfig.pauseDuration + Math.floor(Math.random() * 250);
+                } else {
+                    delay = modeConfig.baseDelay +
+                        Math.floor(Math.random() * (modeConfig.jitterMax - modeConfig.jitterMin)) +
+                        modeConfig.jitterMin;
+                }
+            } else {
+                delay = Math.floor(Math.random() *
+                    (modeConfig.max - modeConfig.min) + modeConfig.min);
+            }
             
             if (CONFIG.enabled) {
                 setTimeout(clickLikeButton, delay);
@@ -331,57 +440,6 @@
                 console.error('Click error:', error);
             }
             updateStats(false);
-        }
-    }
-
-    // Enhanced statistics tracking with combo stats
-    function updateStats(success = true) {
-        CONFIG.stats.totalClicks++;
-        if (success) {
-            CONFIG.stats.successfulClicks++;
-            updateCombo(true);
-        } else {
-            CONFIG.stats.failedClicks++;
-            updateCombo(false);
-        }
-        
-        const runtime = CONFIG.stats.startTime ? 
-            Math.round((Date.now() - CONFIG.stats.startTime) / 1000) : 0;
-        
-        const clicksPerSecond = runtime > 0 ? 
-            (CONFIG.stats.successfulClicks / runtime).toFixed(2) : 0;
-
-        console.log(`
-        📊 Auto Liker Stats:
-        ▶ Runtime: ${runtime}s
-        ❤ Total Clicks: ${CONFIG.stats.totalClicks}
-        ✅ Successful: ${CONFIG.stats.successfulClicks}
-        ❌ Failed: ${CONFIG.stats.failedClicks}
-        🔥 Current Combo: ${CONFIG.stats.currentCombo}x
-        🏆 Max Combo: ${CONFIG.stats.maxCombo}x
-        🎯 Total Combos: ${CONFIG.stats.combos}
-        ⚡ Clicks/sec: ${clicksPerSecond}
-        🔄 Mode: ${MODES[CONFIG.mode].name}
-        `);
-    }
-
-    // Update the stats display in the control panel
-    function updateStatsDisplay(statsDiv) {
-        if (CONFIG.enabled) {
-            const runtime = Math.round((Date.now() - CONFIG.stats.startTime) / 1000);
-            const clicksPerSecond = runtime > 0 ? 
-                (CONFIG.stats.successfulClicks / runtime).toFixed(2) : 0;
-            
-            statsDiv.innerHTML = `
-                <span style="color: #ff3b5c">Mode: ${MODES[CONFIG.mode].name}</span><br>
-                Runtime: ${runtime}s<br>
-                Total Clicks: ${CONFIG.stats.totalClicks}<br>
-                Success Rate: ${Math.round((CONFIG.stats.successfulClicks / CONFIG.stats.totalClicks) * 100 || 0)}%<br>
-                Current Combo: <span style="color: #ff3b5c">${CONFIG.stats.currentCombo}x</span><br>
-                Max Combo: <span style="color: #ff3b5c">${CONFIG.stats.maxCombo}x</span><br>
-                Total Combos: ${CONFIG.stats.combos}<br>
-                Clicks/sec: ${clicksPerSecond}
-            `;
         }
     }
 
@@ -598,7 +656,7 @@
                 left: 50%;
                 top: 50%;
                 transform: translate(-50%, -50%);
-                background: rgba(22, 24, 35, 0.95);
+                background: #010101;
                 color: white;
                 padding: 20px;
                 border-radius: 20px;
@@ -619,8 +677,8 @@
                 padding: 10px;
                 cursor: grab;
                 user-select: none;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-                background: linear-gradient(to right, rgba(255, 59, 92, 0.1), transparent);
+                border-bottom: 1px solid #25f4ee;
+                background: #010101;
                 border-radius: 20px 20px 0 0;
             `;
 
@@ -633,10 +691,10 @@
 
             titleContainer.style.cssText = 'flex: 1;';
             
-            title.textContent = 'TikTok Auto Liker Pro';
-            title.style.cssText = 'font-size: 16px; font-weight: 600; color: #ff3b5c;';
+            title.textContent = 'TikTok Live AutoLiker';
+            title.style.cssText = 'font-size: 16px; font-weight: 600; color: #25f4ee;';
 
-            subtitle.textContent = 'Created by Amped';
+            subtitle.textContent = 'Maintained by joqtan';
             subtitle.style.cssText = 'font-size: 12px; color: rgba(255,255,255,0.6);';
 
             content.style.cssText = `
@@ -645,13 +703,14 @@
             `;
 
             toggleButton.textContent = 'Start Auto-Liker';
+            toggleButton.type = 'button';
             toggleButton.style.cssText = `
                 width: 100%;
                 padding: 12px;
                 margin-bottom: 10px;
                 border: none;
                 border-radius: 8px;
-                background: linear-gradient(45deg, #ff3b5c, #ff2f40);
+                background: #ff3b5c;
                 color: white;
                 cursor: pointer;
                 font-weight: 600;
@@ -665,8 +724,8 @@
                 margin-bottom: 10px;
                 border: none;
                 border-radius: 8px;
-                background: linear-gradient(45deg, #2196F3, #1976D2);
-                color: white;
+                background: #25f4ee;
+                color: #161823;
                 cursor: pointer;
                 transition: all 0.3s ease;
             `;
@@ -675,28 +734,32 @@
                 font-size: 13px;
                 margin-top: 10px;
                 padding: 10px;
-                background: rgba(255,255,255,0.1);
+                 background: #161823;
                 border-radius: 8px;
             `;
 
-            footer.innerHTML = `Version 2.8.2 | Made with ❤️<br>© 2024 Amped`;
+            footer.innerHTML = `Version 0.1.0 | Made with ❤️<br>Maintained by joqtan<br>Based on AmpedWasTaken`;
             footer.style.cssText = `
                 margin-top: 15px;
                 padding-top: 15px;
                 border-top: 1px solid rgba(255,255,255,0.1);
                 font-size: 11px;
-                color: rgba(255,255,255,0.5);
+                color: rgba(255,255,255,0.6);
                 text-align: center;
             `;
 
             // Event listeners
-            toggleButton.onclick = () => {
-                toggleAutoLiker();
+            const updateToggleButton = () => {
                 toggleButton.textContent = CONFIG.enabled ? 'Stop Auto-Liker' : 'Start Auto-Liker';
-                toggleButton.style.background = CONFIG.enabled ? 
-                    'linear-gradient(45deg, #ff2f40, #ff1f1f)' : 
-                    'linear-gradient(45deg, #ff3b5c, #ff2f40)';
+                toggleButton.style.background = CONFIG.enabled ? '#fe2c55' : '#ff3b5c';
             };
+
+            toggleButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                toggleAutoLiker();
+                updateToggleButton();
+            });
 
             modeButton.onclick = () => {
                 switchMode();
@@ -811,7 +874,7 @@
             try {
                 document.head.appendChild(style);
                 addControlPanel();
-                showNotification('TikTok Auto Liker Pro Ready!\nPress L to toggle, M to switch modes', 'info');
+                showNotification('TikTok Live AutoLiker Ready!\nPress L to toggle, M to switch modes', 'info');
             } catch (error) {
                 console.error('Error during initialization:', error);
                 // Retry initialization if it fails
@@ -846,4 +909,4 @@
         initialize();
     }
 
-})(); 
+})();
