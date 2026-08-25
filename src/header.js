@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         TikTok Live AutoLiker
-// @namespace    http://tampermonkey.net/
+// @namespace    https://tampermonkey.net/
 // @version      __AUTO_LIKER_VERSION__
 // @description  Advanced auto-liker for TikTok live streams with ultra-fast combo mode
 // @author       joqtan
-// @match        https://www.tiktok.com/*
+// @match        https://www.tiktok.com/live*
+// @match        https://www.tiktok.com/*/live*
 // @grant        none
 // @run-at       document-end
 // ==/UserScript==

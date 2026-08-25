@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         TikTok Live AutoLiker
-// @namespace    http://tampermonkey.net/
-// @version      0.2.0
+// @namespace    https://tampermonkey.net/
+// @version      0.2.1
 // @description  Advanced auto-liker for TikTok live streams with ultra-fast combo mode
 // @author       joqtan
-// @match        https://www.tiktok.com/*
+// @match        https://www.tiktok.com/live*
+// @match        https://www.tiktok.com/*/live*
 // @grant        none
 // @run-at       document-end
 // ==/UserScript==
@@ -1004,7 +1005,7 @@
                 border-radius: 8px;
             `;
 
-            footer.innerHTML = `Version 0.2.0 | Made with ❤️<br>Maintained by joqtan<br>Based on AmpedWasTaken`;
+            footer.innerHTML = `Version 0.2.1 | Made with ❤️<br>Maintained by joqtan<br>Based on AmpedWasTaken`;
             footer.style.cssText = `
                 margin-top: 15px;
                 padding-top: 15px;

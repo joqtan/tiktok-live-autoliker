@@ -7,7 +7,7 @@ TikTok Live AutoLiker is a maintained fork of [TikTok Live Liker](https://github
 
 ## Current Status
 
-- **Version:** 0.2.0 (see [`VERSION`](./VERSION))
+- **Version:** 0.2.1 (see [`VERSION`](./VERSION))
 - **Maintainer:** joqtan
 - **Original project:** [AmpedWasTaken/TikTok-Live-Liker](https://github.com/AmpedWasTaken/TikTok-Live-Liker)
 - **License:** MIT
