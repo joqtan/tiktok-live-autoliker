@@ -855,7 +855,6 @@
             title.textContent = 'TikTok Live AutoLiker';
             title.style.cssText = 'font-size: 16px; font-weight: 600; color: #25f4ee;';
 
-            subtitle.textContent = 'Maintained by joqtan';
             subtitle.style.cssText = 'font-size: 12px; color: rgba(255,255,255,0.6);';
 
             content.style.cssText = `
