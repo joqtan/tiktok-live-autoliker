@@ -640,13 +640,28 @@
         showNotification(`Switched to ${MODES[CONFIG.mode].name}`, 'info');
     }
 
+    function isEditableKeyboardTarget(target) {
+        while (target && target !== document) {
+            const tagName = target.tagName && target.tagName.toLowerCase();
+            const role = target.getAttribute && target.getAttribute('role');
+            const contentEditable = target.getAttribute && target.getAttribute('contenteditable');
+
+            if (tagName === 'input' || tagName === 'textarea' || tagName === 'select' ||
+                target.isContentEditable || (contentEditable && contentEditable !== 'false') ||
+                role === 'textbox' || role === 'searchbox') {
+                return true;
+            }
+            target = target.parentElement;
+        }
+        return false;
+    }
+
     // Enhanced keyboard controls
     function setupKeyboardControls() {
         if (CONFIG.keyboardCleanup) return;
 
         const handleKeydown = function(event) {
-            if (event.target.tagName.toLowerCase() !== 'input' &&
-                event.target.tagName.toLowerCase() !== 'textarea') {
+            if (!isEditableKeyboardTarget(event.target)) {
 
                 if (event.key.toLowerCase() === CONFIG.buttonKey) {
                     toggleAutoLiker();
