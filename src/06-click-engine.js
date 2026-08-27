@@ -1,10 +1,15 @@
     function dispatchLikeClick(button) {
+        if (!isUsableLikeButton(button)) {
+            return false;
+        }
+
         const clickEvent = new MouseEvent('click', {
             bubbles: true,
             cancelable: true,
             view: window
         });
         button.dispatchEvent(clickEvent);
+        return true;
     }
 
     function waitBetweenClicks(delay) {
@@ -24,31 +29,40 @@
     async function burstClick(button, count) {
         for (let index = 0; index < count && CONFIG.enabled; index++) {
             try {
-                dispatchLikeClick(button);
+                if (!dispatchLikeClick(button)) {
+                    updateStats(false);
+                    return false;
+                }
                 updateStats(true);
             } catch (error) {
                 if (CONFIG.debugMode) {
                     console.error(`Burst click error at index ${index}:`, error);
                 }
                 updateStats(false);
+                return false;
             }
 
             if (index < count - 1 && CONFIG.enabled) {
                 await waitBetweenClicks(MODES.combo.burstDelay);
             }
         }
+        return true;
+    }
+
+    function retryMissingButton() {
+        updateStats(false);
+        scheduleTrackedTimeout(clickLikeButton, missingButtonDelay, CONFIG.clickTimerIds);
+        missingButtonDelay = Math.min(
+            missingButtonDelay * MISSING_BUTTON_RETRY.multiplier,
+            MISSING_BUTTON_RETRY.maxDelay
+        );
     }
 
     // Enhanced click function with optimized combo support
     async function clickLikeButton() {
         const likeButton = findLikeButton();
         if (!likeButton) {
-            updateStats(false);
-            scheduleTrackedTimeout(clickLikeButton, missingButtonDelay, CONFIG.clickTimerIds);
-            missingButtonDelay = Math.min(
-                missingButtonDelay * MISSING_BUTTON_RETRY.multiplier,
-                MISSING_BUTTON_RETRY.maxDelay
-            );
+            retryMissingButton();
             return;
         }
         missingButtonDelay = MISSING_BUTTON_RETRY.initialDelay;
@@ -57,9 +71,19 @@
             const modeConfig = CONFIG.mode === 'custom' ? CONFIG.customDelay : MODES[CONFIG.mode];
             
             if (CONFIG.mode === 'combo') {
-                await burstClick(likeButton, modeConfig.burstCount);
+                if (!await burstClick(likeButton, modeConfig.burstCount)) {
+                    scheduleTrackedTimeout(clickLikeButton, missingButtonDelay, CONFIG.clickTimerIds);
+                    missingButtonDelay = Math.min(
+                        missingButtonDelay * MISSING_BUTTON_RETRY.multiplier,
+                        MISSING_BUTTON_RETRY.maxDelay
+                    );
+                    return;
+                }
             } else {
-                dispatchLikeClick(likeButton);
+                if (!dispatchLikeClick(likeButton)) {
+                    retryMissingButton();
+                    return;
+                }
                 updateStats(true);
 
                 // Human Mode: occasional natural double-tap (2 clicks together),
@@ -68,10 +92,13 @@
                     scheduleTrackedTimeout(() => {
                         if (!CONFIG.enabled) return;
                         try {
-                            dispatchLikeClick(likeButton);
+                            if (!dispatchLikeClick(likeButton)) {
+                                retryMissingButton();
+                                return;
+                            }
                             updateStats(true);
                         } catch (error) {
-                            updateStats(false);
+                            retryMissingButton();
                         }
                     }, Math.floor(Math.random() * 90 + 40), CONFIG.clickTimerIds); // 40-130ms gap
                 }
@@ -103,6 +130,6 @@
             if (CONFIG.debugMode) {
                 console.error('Click error:', error);
             }
-            updateStats(false);
+            retryMissingButton();
         }
     }
