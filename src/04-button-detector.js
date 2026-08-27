@@ -1,10 +1,26 @@
     let likeButtonRoot = null;
 
+    function isUsableLikeButton(element) {
+        try {
+            if (!element || !element.isConnected) {
+                return false;
+            }
+
+            const rect = element.getBoundingClientRect();
+            const style = window.getComputedStyle(element);
+            return rect.width > 0 && rect.height > 0 &&
+                style.display !== 'none' &&
+                style.visibility !== 'hidden' &&
+                style.opacity !== '0';
+        } catch (error) {
+            return false;
+        }
+    }
+
     function getVisibleE2eButton(root) {
         const e2eButtons = root.querySelectorAll(BUTTON_STRUCTURE.e2e);
         for (const element of e2eButtons) {
-            const rect = element.getBoundingClientRect();
-            if (rect.width > 0 && rect.height > 0) {
+            if (isUsableLikeButton(element)) {
                 return element;
             }
         }
@@ -34,16 +50,27 @@
 
             const focusedRoot = likeButtonRoot || document;
             let button = getVisibleE2eButton(focusedRoot);
-            if (!button && focusedRoot !== document) {
-                button = getVisibleE2eButton(document);
-            }
             if (button) {
                 likeButtonRoot = button.closest(`.${BUTTON_STRUCTURE.container}`);
                 return button;
             }
 
+            if (focusedRoot !== document) {
+                likeButtonRoot = null;
+                button = getVisibleE2eButton(document);
+                if (button) {
+                    likeButtonRoot = button.closest(`.${BUTTON_STRUCTURE.container}`);
+                    return button;
+                }
+            }
+
             const legacyRoot = likeButtonRoot || document;
-            return findLegacyLikeButton(legacyRoot);
+            button = findLegacyLikeButton(legacyRoot);
+            if (!button && legacyRoot !== document) {
+                likeButtonRoot = null;
+                button = findLegacyLikeButton(document);
+            }
+            return button;
 
         } catch (error) {
             console.error('Error finding like button:', error);
@@ -59,7 +86,8 @@
             const hasLikeStructure = element.closest(`.${BUTTON_STRUCTURE.container}`);
             const isClickable = window.getComputedStyle(element).cursor === 'pointer';
 
-            return hasLikeClass && (hasLikeStructure || isClickable);
+            return isUsableLikeButton(element) && hasLikeClass &&
+                (hasLikeStructure || isClickable);
         } catch (error) {
             return false;
         }
