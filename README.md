@@ -1,144 +1,76 @@
-# TikTok Live Auto Liker Pro 🚀
+# TikTok Live AutoLiker
 
-A powerful and feature-rich userscript for automatically liking TikTok live streams with multiple modes, combo tracking, and a beautiful user interface.
+TikTok Live AutoLiker is a maintained fork of [TikTok Live Liker](https://github.com/AmpedWasTaken/TikTok-Live-Liker), the original userscript by Amped (AmpedWasTaken). It automates likes on TikTok live streams through a Tampermonkey control panel.
 
-![Version](https://img.shields.io/badge/version-2.8.2-blue)
+![Version](https://img.shields.io/badge/version-0.2.1-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-## 🖼️ Preview
+## Current Status
 
-<p align="center">
-  <img src="preview.png" alt="TikTok Live Auto Liker Pro Interface" width="300">
-</p>
+- **Version:** 0.2.1 (see [`VERSION`](./VERSION))
+- **Maintainer:** joqtan
+- **Original project:** [AmpedWasTaken/TikTok-Live-Liker](https://github.com/AmpedWasTaken/TikTok-Live-Liker)
+- **License:** MIT
 
-> Modern, draggable interface with real-time statistics, combo tracking, and multiple liking modes
+This fork keeps the original project's attribution and license while maintaining its current implementation and build structure.
 
-## ✨ Features
+## Features
 
-- **Multiple Liking Modes**:
-  - 🔄 Normal Mode: Balanced clicking (100-300ms)
-  - 🚀 Turbo Mode: Fast clicking (30-100ms)
-  - 🕵️ Stealth Mode: Natural-looking clicks (300-800ms)
-  - ⚡ Combo Mode: Ultra-fast burst clicks (5-20ms)
+- Automatic liking on TikTok live stream pages.
+- Like-button detection using TikTok's `data-e2e="room-chat-like-btn"` anchor, with legacy class-based fallbacks.
+- Six modes: Normal, Turbo, Stealth, Human, Combo, and Custom.
+- Human Mode uses irregular delays, occasional double-taps, and short pauses instead of a fixed interval.
+- Combo Mode sends short bursts of clicks for combo-focused use.
+- Custom Mode provides minimum and maximum delay sliders, shown only while Custom Mode is active.
+- Draggable, collapsible control panel with a dark theme.
+- Panel position, collapsed state, and Custom Mode delay settings persisted in browser `localStorage`.
+- Live statistics for runtime, total clicks, success rate, current and maximum combo, completed combos, and clicks per second.
+- Keyboard shortcuts: `L` toggles the auto-liker and `M` cycles through modes.
+- Notifications for status changes, mode changes, and combo events.
 
-- **Advanced Statistics**:
-  - Real-time click tracking
-  - Success rate monitoring
-  - Clicks per second
-  - Combo counter
-  - Maximum combo tracking
+## Installation
 
-- **Modern UI**:
-  - Draggable interface
-  - Collapsible panel
-  - Beautiful animations
-  - Position memory
-  - Dark theme
+1. Install [Tampermonkey for Chrome](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo), [Firefox](https://addons.mozilla.org/en-US/firefox/addon/tampermonkey/), or [Edge](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd).
+2. Open the generated [`tiktok_live_autoliker.user.js`](./tiktok_live_autoliker.user.js) file, or install the userscript from the fork's GitHub repository when it is published there.
+3. Confirm the installation in Tampermonkey.
+4. Open a TikTok live stream. The control panel appears automatically when the page path includes `/live`.
 
-- **Smart Features**:
-  - Auto-detection of like button
-  - Multiple detection methods
-  - Error handling
-  - Performance optimization
-  - Session persistence
+The final artifact is a single installable userscript. It includes the ordered source modules and can be installed directly in Tampermonkey without additional runtime dependencies.
 
-## 🚀 Installation
+## Usage
 
-1. **Install Tampermonkey**:
-   - [Chrome Extension](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
-   - [Firefox Add-on](https://addons.mozilla.org/en-US/firefox/addon/tampermonkey/)
-   - [Edge Extension](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd)
+1. Open a TikTok live stream in a supported desktop browser.
+2. Click **Start Auto-Liker** to begin and **Stop Auto-Liker** to stop.
+3. Click the mode button to cycle through the available modes.
+4. Select **Custom Mode** to reveal the minimum and maximum delay sliders. Values are stored automatically in the browser and constrained to `10–2000 ms` with the minimum never exceeding the maximum.
+5. Drag the panel by its header or collapse it with the arrow control. The panel remembers those settings in the browser.
+6. Press `L` to toggle the auto-liker or `M` to switch modes when focus is not in a text input or textarea.
 
-2. **Install the Script**:
-   - Click [here](https://github.com/AmpedWasTaken/TikTok-Live-Liker/raw/refs/heads/main/tiktok_live_autoliker.user.js) to install
-   - Or copy the script content and create a new userscript in Tampermonkey
+The script only starts its liking loop after a visible like button is detected. Results can vary when TikTok changes its live-stream markup, browser behavior, or rate limits.
 
-## 💡 Usage
+## Development
 
-1. **Open TikTok Live**:
-   - Go to any TikTok live stream
-   - The control panel will appear automatically in the center of the screen
-   - Drag it to your preferred position (it will remember the position)
+The `src/` directory contains the userscript modules in execution order:
 
-2. **Control Panel**:
-   - Click "Start Auto-Liker" to begin
-   - Use the mode button to switch between modes
-   - Drag the panel by its header to reposition
-   - Collapse/expand using the arrow button
+- `header.js` contains the Tampermonkey metadata.
+- `01-credits.js` through `08-bootstrap.js` contain credits, configuration, detection, click handling, statistics, UI, and initialization logic.
 
-3. **Keyboard Shortcuts**:
-   - `L`: Toggle Auto-Liker on/off
-   - `M`: Switch between modes
+Run the build script from the repository root:
 
-4. **Modes Explained**:
-   - **Normal Mode**: Best for general use, balanced speed
-   - **Turbo Mode**: Faster clicking for more likes
-   - **Stealth Mode**: More natural behavior to avoid detection
-   - **Combo Mode**: Maximum speed for achieving combos
+```sh
+node tools/build.js
+```
 
-## 📊 Statistics
+This generates `tiktok_live_autoliker.user.js`, the single userscript artifact used for installation. After a build, validate its JavaScript syntax with:
 
-The script provides real-time statistics:
-- Total clicks performed
-- Success rate percentage
-- Current active combo
-- Maximum combo achieved
-- Clicks per second
-- Runtime tracking
-- Total combos completed
+```sh
+node --check tiktok_live_autoliker.user.js
+```
 
-## ⚙️ Customization
+## Responsible Use
 
-The script automatically saves your preferences:
-- Last used mode
-- Panel position on screen
-- Panel collapse state
-- Statistics tracking
+This project is provided for educational purposes. Automated interaction may be restricted by TikTok's Terms of Service or other platform rules. Review and follow the applicable terms, use the script responsibly, and understand that use is at your own risk.
 
-## 🔒 Safety Features
+## Credits and License
 
-- Smart rate limiting to prevent detection
-- Natural click patterns in Stealth Mode
-- Error handling and recovery
-- Multiple button detection methods
-- Safe mode options
-
-## ⚠️ Important Notes
-
-1. **Performance**:
-   - Different modes have different CPU usage
-   - Combo Mode is the most intensive
-   - Adjust based on your device's capabilities
-
-2. **Browser Support**:
-   - Works best on Chrome/Edge
-   - Firefox may have slightly different performance
-   - Mobile browsers not supported
-
-3. **Limitations**:
-   - Works only on TikTok live streams
-   - Requires Tampermonkey
-   - Performance may vary by device/browser
-   - Follow TikTok's terms of service
-
-## 🚫 Disclaimer
-
-This script is for educational purposes only. Use responsibly and in accordance with TikTok's terms of service. The developers are not responsible for any misuse or consequences.
-
-## 🤝 Contributing
-
-Feel free to:
-- Report bugs
-- Suggest features
-- Submit pull requests
-- Share improvements
-
-## 📜 License
-
-MIT License - feel free to modify and share!
-
-## 🙏 Credits
-
-Created by Amped  
-Version 2.8.2  
-© 2024 All rights reserved 
+This fork is maintained by **joqtan** and is based on the original work by **Amped / AmpedWasTaken** in [TikTok-Live-Liker](https://github.com/AmpedWasTaken/TikTok-Live-Liker). The original project and this fork are distributed under the MIT License.
