@@ -33,7 +33,7 @@
             try {
                 document.head.appendChild(style);
                 addControlPanel();
-                showNotification('TikTok Live AutoLiker Ready!\nPress L to toggle, M to switch modes', 'info');
+                showNotification('TikTok Live AutoLiker Ready!\nPress L to toggle, Shift+M to switch modes', 'info');
             } catch (error) {
                 console.error('Error during initialization:', error);
                 // Retry initialization if it fails
