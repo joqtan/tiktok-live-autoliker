@@ -56,7 +56,7 @@
 
                 if (event.key.toLowerCase() === CONFIG.buttonKey) {
                     toggleAutoLiker();
-                } else if (event.key.toLowerCase() === 'm') {
+                } else if (event.shiftKey && event.key.toLowerCase() === 'm') {
                     switchMode();
                 }
             }

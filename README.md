@@ -25,7 +25,7 @@ This fork keeps the original project's attribution and license while maintaining
 - Draggable, collapsible control panel with a dark theme.
 - Panel position, collapsed state, and Custom Mode delay settings persisted in browser `localStorage`.
 - Live statistics for runtime, total clicks, success rate, current and maximum combo, completed combos, and clicks per second.
-- Keyboard shortcuts: `L` toggles the auto-liker and `M` cycles through modes.
+- Keyboard shortcuts: `L` toggles the auto-liker and `Shift+M` cycles through modes; bare `M` remains available to TikTok for stream mute.
 - Notifications for status changes, mode changes, and combo events.
 
 ## Installation
@@ -44,7 +44,7 @@ The final artifact is a single installable userscript. It includes the ordered s
 3. Click the mode button to cycle through the available modes.
 4. Select **Custom Mode** to reveal the minimum and maximum delay sliders. Values are stored automatically in the browser and constrained to `10–2000 ms` with the minimum never exceeding the maximum.
 5. Drag the panel by its header or collapse it with the arrow control. The panel remembers those settings in the browser.
-6. Press `L` to toggle the auto-liker or `M` to switch modes when focus is not in a text input or textarea.
+6. Press `L` to toggle the auto-liker or `Shift+M` to switch modes when focus is not in a text input or textarea. Bare `M` remains available to TikTok for stream mute.
 
 The script only starts its liking loop after a visible like button is detected. Results can vary when TikTok changes its live-stream markup, browser behavior, or rate limits.
 
