@@ -151,13 +151,13 @@
         human: {
             // Human Mode: bounded irregular delays with occasional natural
             // double/triple-taps and longer pauses to avoid a mechanical pattern.
-            minDelay: 300,
-            maxDelay: 550,
+            minDelay: 200,
+            maxDelay: 450,
             doubleTapChance: 0.25,
             tripleTapChance: 0.08,
             pauseChance: 0.06,
-            pauseMin: 650,
-            pauseMax: 850,
+            pauseMin: 100,
+            pauseMax: 500,
             name: "👤 Human Mode",
             burstCount: 1
         },

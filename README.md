@@ -19,7 +19,7 @@ This fork keeps the original project's attribution and license while maintaining
 - Automatic liking on TikTok live stream pages.
 - Like-button detection using TikTok's `data-e2e="room-chat-like-btn"` anchor, with legacy class-based fallbacks.
 - Six modes: Normal, Turbo, Stealth, Human, Combo, and Custom.
-- Human Mode uses irregular 300–550 ms delays, occasional 650–850 ms pauses, and random double- or lower-probability triple-taps instead of a fixed interval.
+- Human Mode uses irregular 200–450 ms delays, occasional 100–500 ms pauses, and random double- or lower-probability triple-taps instead of a fixed interval.
 - Combo Mode sends short bursts of clicks for combo-focused use.
 - Custom Mode provides minimum and maximum delay sliders, shown only while Custom Mode is active.
 - Draggable, collapsible control panel with a dark theme.
