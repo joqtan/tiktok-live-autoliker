@@ -149,16 +149,15 @@
             burstCount: 1
         },
         human: {
-            // Human Mode: irregular, organic delay (base + jitter) with
-            // occasional natural double-taps and a short breather to avoid a
-            // mechanical pattern, without long dead gaps. Roughly ~1 like every
-            // 0.35-0.6s on average.
-            baseDelay: 400,
-            jitterMin: 200,
-            jitterMax: 500,
+            // Human Mode: bounded irregular delays with occasional natural
+            // double/triple-taps and longer pauses to avoid a mechanical pattern.
+            minDelay: 300,
+            maxDelay: 550,
             doubleTapChance: 0.25,
+            tripleTapChance: 0.08,
             pauseChance: 0.06,
-            pauseDuration: 850,
+            pauseMin: 650,
+            pauseMax: 850,
             name: "👤 Human Mode",
             burstCount: 1
         },

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TikTok Live AutoLiker
 // @namespace    https://tampermonkey.net/
-// @version      0.2.2
+// @version      0.2.3
 // @description  Advanced auto-liker for TikTok live streams with ultra-fast combo mode
 // @author       joqtan
 // @license      MIT
@@ -185,16 +185,15 @@
             burstCount: 1
         },
         human: {
-            // Human Mode: irregular, organic delay (base + jitter) with
-            // occasional natural double-taps and a short breather to avoid a
-            // mechanical pattern, without long dead gaps. Roughly ~1 like every
-            // 0.35-0.6s on average.
-            baseDelay: 400,
-            jitterMin: 200,
-            jitterMax: 500,
+            // Human Mode: bounded irregular delays with occasional natural
+            // double/triple-taps and longer pauses to avoid a mechanical pattern.
+            minDelay: 300,
+            maxDelay: 550,
             doubleTapChance: 0.25,
+            tripleTapChance: 0.08,
             pauseChance: 0.06,
-            pauseDuration: 850,
+            pauseMin: 650,
+            pauseMax: 850,
             name: "👤 Human Mode",
             burstCount: 1
         },
@@ -587,6 +586,24 @@
         );
     }
 
+    function scheduleHumanExtraClicks(button, remainingClicks) {
+        if (remainingClicks <= 0) return;
+
+        scheduleTrackedTimeout(() => {
+            if (!CONFIG.enabled) return;
+            try {
+                if (!dispatchLikeClick(button)) {
+                    updateStats(false);
+                    return;
+                }
+                updateStats(true);
+                scheduleHumanExtraClicks(button, remainingClicks - 1);
+            } catch (error) {
+                updateStats(false);
+            }
+        }, Math.floor(Math.random() * 91) + 40, CONFIG.clickTimerIds); // 40-130ms gap
+    }
+
     // Enhanced click function with optimized combo support
     async function clickLikeButton() {
         const likeButton = findLikeButton();
@@ -615,21 +632,15 @@
                 }
                 updateStats(true);
 
-                // Human Mode: occasional natural double-tap (2 clicks together),
-                // like when someone really likes a moment of the stream.
-                if (CONFIG.mode === 'human' && Math.random() < modeConfig.doubleTapChance) {
-                    scheduleTrackedTimeout(() => {
-                        if (!CONFIG.enabled) return;
-                        try {
-                            if (!dispatchLikeClick(likeButton)) {
-                                retryMissingButton();
-                                return;
-                            }
-                            updateStats(true);
-                        } catch (error) {
-                            retryMissingButton();
-                        }
-                    }, Math.floor(Math.random() * 90 + 40), CONFIG.clickTimerIds); // 40-130ms gap
+                // Triple and double taps are mutually exclusive. The initial
+                // click above is followed by only the remaining clicks.
+                if (CONFIG.mode === 'human') {
+                    const sequenceRoll = Math.random();
+                    if (sequenceRoll < modeConfig.tripleTapChance) {
+                        scheduleHumanExtraClicks(likeButton, 2);
+                    } else if (sequenceRoll < modeConfig.tripleTapChance + modeConfig.doubleTapChance) {
+                        scheduleHumanExtraClicks(likeButton, 1);
+                    }
                 }
             }
             
@@ -638,14 +649,12 @@
 
             let delay;
             if (CONFIG.mode === 'human') {
-                // Irregular human delay: base + jitter, with occasional short
-                // breather to break the mechanical pattern.
                 if (Math.random() < modeConfig.pauseChance) {
-                    delay = modeConfig.pauseDuration + Math.floor(Math.random() * 250);
+                    delay = Math.floor(Math.random() *
+                        (modeConfig.pauseMax - modeConfig.pauseMin + 1) + modeConfig.pauseMin);
                 } else {
-                    delay = modeConfig.baseDelay +
-                        Math.floor(Math.random() * (modeConfig.jitterMax - modeConfig.jitterMin)) +
-                        modeConfig.jitterMin;
+                    delay = Math.floor(Math.random() *
+                        (modeConfig.maxDelay - modeConfig.minDelay + 1) + modeConfig.minDelay);
                 }
             } else {
                 delay = Math.floor(Math.random() *
@@ -1076,7 +1085,7 @@
                 border-radius: 8px;
             `;
 
-            footer.innerHTML = `Version 0.2.2 | Made with ❤️<br>Maintained by joqtan<br>Based on AmpedWasTaken`;
+            footer.innerHTML = `Version 0.2.3 | Made with ❤️<br>Maintained by joqtan<br>Based on AmpedWasTaken`;
             footer.style.cssText = `
                 margin-top: 15px;
                 padding-top: 15px;
