@@ -60,6 +60,28 @@
         }
     }
 
+    const MODE_IDS = Object.freeze({
+        normal: 1,
+        turbo: 2,
+        stealth: 3,
+        human: 4,
+        combo: 5,
+        custom: 6
+    });
+
+    const MODE_KEYS_BY_ID = Object.freeze(Object.fromEntries(
+        Object.entries(MODE_IDS).map(([mode, id]) => [String(id), mode])
+    ));
+
+    function loadSelectedMode() {
+        const savedModeId = STORAGE.get('autoLikerMode');
+        return MODE_KEYS_BY_ID[savedModeId] || 'normal';
+    }
+
+    function saveSelectedMode() {
+        STORAGE.set('autoLikerMode', String(MODE_IDS[CONFIG.mode]));
+    }
+
     function saveCustomDelaySettings() {
         try {
             STORAGE.set('autoLikerCustomDelays', JSON.stringify(CONFIG.customDelay));
@@ -84,7 +106,7 @@
             maxCombo: 0,
             currentCombo: 0
         },
-        mode: 'normal',
+        mode: loadSelectedMode(),
         customDelay: loadCustomDelaySettings(),
         comboTimeoutId: null,
         clickTimerIds: new Set(),

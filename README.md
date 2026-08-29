@@ -2,12 +2,12 @@
 
 TikTok Live AutoLiker is a maintained fork of [TikTok Live Liker](https://github.com/AmpedWasTaken/TikTok-Live-Liker), the original userscript by Amped (AmpedWasTaken). It automates likes on TikTok live streams through a Tampermonkey control panel.
 
-![Version](https://img.shields.io/badge/version-0.2.3-blue)
+![Version](https://img.shields.io/badge/version-0.2.4-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## Current Status
 
-- **Version:** 0.2.3 (see [`VERSION`](./VERSION))
+- **Version:** 0.2.4 (see [`VERSION`](./VERSION))
 - **Maintainer:** joqtan
 - **Original project:** [AmpedWasTaken/TikTok-Live-Liker](https://github.com/AmpedWasTaken/TikTok-Live-Liker)
 - **License:** MIT
@@ -23,7 +23,8 @@ This fork keeps the original project's attribution and license while maintaining
 - Combo Mode sends short bursts of clicks for combo-focused use.
 - Custom Mode provides minimum and maximum delay sliders, shown only while Custom Mode is active.
 - Draggable, collapsible control panel with a dark theme.
-- Panel position, collapsed state, and Custom Mode delay settings persisted in browser `localStorage`.
+- Panel position, collapsed state, Custom Mode delay settings, and the last selected mode persisted in browser `localStorage`.
+- Mode selections use stable IDs: Normal `1`, Turbo `2`, Stealth `3`, Human `4`, Combo `5`, and Custom `6`.
 - Live statistics for runtime, total clicks, success rate, current and maximum combo, completed combos, and clicks per second.
 - Keyboard shortcuts: `L` toggles the auto-liker and `Shift+M` cycles through modes; bare `M` remains available to TikTok for stream mute.
 - Notifications for status changes, mode changes, and combo events.
@@ -43,8 +44,9 @@ The final artifact is a single installable userscript. It includes the ordered s
 2. Click **Start Auto-Liker** to begin and **Stop Auto-Liker** to stop.
 3. Click the mode button to cycle through the available modes.
 4. Select **Custom Mode** to reveal the minimum and maximum delay sliders. Values are stored automatically in the browser and constrained to `10–2000 ms` with the minimum never exceeding the maximum.
-5. Drag the panel by its header or collapse it with the arrow control. The panel remembers those settings in the browser.
-6. Press `L` to toggle the auto-liker or `Shift+M` to switch modes when focus is not in a text input or textarea. Bare `M` remains available to TikTok for stream mute.
+5. The selected mode is remembered automatically and restored the next time the script loads.
+6. Drag the panel by its header or collapse it with the arrow control. The panel remembers those settings in the browser.
+7. Press `L` to toggle the auto-liker or `Shift+M` to switch modes when focus is not in a text input or textarea. Bare `M` remains available to TikTok for stream mute.
 
 The script only starts its liking loop after a visible like button is detected. Results can vary when TikTok changes its live-stream markup, browser behavior, or rate limits.
 

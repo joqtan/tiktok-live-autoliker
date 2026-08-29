@@ -25,6 +25,7 @@
         const modes = Object.keys(MODES);
         const currentIndex = modes.indexOf(CONFIG.mode);
         CONFIG.mode = modes[(currentIndex + 1) % modes.length];
+        saveSelectedMode();
         if (modeUIUpdater) {
             modeUIUpdater();
         }
