@@ -2,12 +2,12 @@
 
 TikTok Live AutoLiker is a maintained fork of [TikTok Live Liker](https://github.com/AmpedWasTaken/TikTok-Live-Liker), the original userscript by Amped (AmpedWasTaken). It automates likes on TikTok live streams through a Tampermonkey control panel.
 
-![Version](https://img.shields.io/badge/version-0.2.1-blue)
+![Version](https://img.shields.io/badge/version-0.2.2-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## Current Status
 
-- **Version:** 0.2.1 (see [`VERSION`](./VERSION))
+- **Version:** 0.2.2 (see [`VERSION`](./VERSION))
 - **Maintainer:** joqtan
 - **Original project:** [AmpedWasTaken/TikTok-Live-Liker](https://github.com/AmpedWasTaken/TikTok-Live-Liker)
 - **License:** MIT
