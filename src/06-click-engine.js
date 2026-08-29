@@ -58,6 +58,24 @@
         );
     }
 
+    function scheduleHumanExtraClicks(button, remainingClicks) {
+        if (remainingClicks <= 0) return;
+
+        scheduleTrackedTimeout(() => {
+            if (!CONFIG.enabled) return;
+            try {
+                if (!dispatchLikeClick(button)) {
+                    updateStats(false);
+                    return;
+                }
+                updateStats(true);
+                scheduleHumanExtraClicks(button, remainingClicks - 1);
+            } catch (error) {
+                updateStats(false);
+            }
+        }, Math.floor(Math.random() * 91) + 40, CONFIG.clickTimerIds); // 40-130ms gap
+    }
+
     // Enhanced click function with optimized combo support
     async function clickLikeButton() {
         const likeButton = findLikeButton();
@@ -86,21 +104,15 @@
                 }
                 updateStats(true);
 
-                // Human Mode: occasional natural double-tap (2 clicks together),
-                // like when someone really likes a moment of the stream.
-                if (CONFIG.mode === 'human' && Math.random() < modeConfig.doubleTapChance) {
-                    scheduleTrackedTimeout(() => {
-                        if (!CONFIG.enabled) return;
-                        try {
-                            if (!dispatchLikeClick(likeButton)) {
-                                retryMissingButton();
-                                return;
-                            }
-                            updateStats(true);
-                        } catch (error) {
-                            retryMissingButton();
-                        }
-                    }, Math.floor(Math.random() * 90 + 40), CONFIG.clickTimerIds); // 40-130ms gap
+                // Triple and double taps are mutually exclusive. The initial
+                // click above is followed by only the remaining clicks.
+                if (CONFIG.mode === 'human') {
+                    const sequenceRoll = Math.random();
+                    if (sequenceRoll < modeConfig.tripleTapChance) {
+                        scheduleHumanExtraClicks(likeButton, 2);
+                    } else if (sequenceRoll < modeConfig.tripleTapChance + modeConfig.doubleTapChance) {
+                        scheduleHumanExtraClicks(likeButton, 1);
+                    }
                 }
             }
             
@@ -109,14 +121,12 @@
 
             let delay;
             if (CONFIG.mode === 'human') {
-                // Irregular human delay: base + jitter, with occasional short
-                // breather to break the mechanical pattern.
                 if (Math.random() < modeConfig.pauseChance) {
-                    delay = modeConfig.pauseDuration + Math.floor(Math.random() * 250);
+                    delay = Math.floor(Math.random() *
+                        (modeConfig.pauseMax - modeConfig.pauseMin + 1) + modeConfig.pauseMin);
                 } else {
-                    delay = modeConfig.baseDelay +
-                        Math.floor(Math.random() * (modeConfig.jitterMax - modeConfig.jitterMin)) +
-                        modeConfig.jitterMin;
+                    delay = Math.floor(Math.random() *
+                        (modeConfig.maxDelay - modeConfig.minDelay + 1) + modeConfig.minDelay);
                 }
             } else {
                 delay = Math.floor(Math.random() *

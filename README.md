@@ -2,12 +2,12 @@
 
 TikTok Live AutoLiker is a maintained fork of [TikTok Live Liker](https://github.com/AmpedWasTaken/TikTok-Live-Liker), the original userscript by Amped (AmpedWasTaken). It automates likes on TikTok live streams through a Tampermonkey control panel.
 
-![Version](https://img.shields.io/badge/version-0.2.1-blue)
+![Version](https://img.shields.io/badge/version-0.2.3-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## Current Status
 
-- **Version:** 0.2.1 (see [`VERSION`](./VERSION))
+- **Version:** 0.2.3 (see [`VERSION`](./VERSION))
 - **Maintainer:** joqtan
 - **Original project:** [AmpedWasTaken/TikTok-Live-Liker](https://github.com/AmpedWasTaken/TikTok-Live-Liker)
 - **License:** MIT
@@ -19,7 +19,7 @@ This fork keeps the original project's attribution and license while maintaining
 - Automatic liking on TikTok live stream pages.
 - Like-button detection using TikTok's `data-e2e="room-chat-like-btn"` anchor, with legacy class-based fallbacks.
 - Six modes: Normal, Turbo, Stealth, Human, Combo, and Custom.
-- Human Mode uses irregular delays, occasional double-taps, and short pauses instead of a fixed interval.
+- Human Mode uses irregular 200–450 ms delays, occasional 100–500 ms pauses, and random double- or lower-probability triple-taps instead of a fixed interval.
 - Combo Mode sends short bursts of clicks for combo-focused use.
 - Custom Mode provides minimum and maximum delay sliders, shown only while Custom Mode is active.
 - Draggable, collapsible control panel with a dark theme.
