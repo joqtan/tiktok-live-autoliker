@@ -36,27 +36,46 @@
         return fallback;
     }
 
-    const CUSTOM_DELAY_LIMITS = {
-        min: 10,
-        max: 2000
+    const DEBUG_CONFIG_DEFAULTS = {
+        minDelay: 200,
+        maxDelay: 450,
+        doubleTapChance: 0.25,
+        tripleTapChance: 0.08,
+        pauseChance: 0.06,
+        pauseMin: 100,
+        pauseMax: 500
     };
-    const CUSTOM_DELAY_DEFAULTS = {
-        min: 100,
-        max: 300
+    const DEBUG_CONFIG_LIMITS = {
+        delay: { min: 10, max: 2000 },
+        chance: { min: 0, max: 1 }
     };
 
-    function loadCustomDelaySettings() {
+    function normalizeDebugConfig(saved) {
+        const config = { ...DEBUG_CONFIG_DEFAULTS };
+        if (!saved || typeof saved !== 'object') return config;
+        ['minDelay', 'maxDelay', 'pauseMin', 'pauseMax'].forEach((key) => {
+            if (Number.isFinite(Number(saved[key]))) config[key] = Math.round(Number(saved[key]));
+            config[key] = Math.min(DEBUG_CONFIG_LIMITS.delay.max,
+                Math.max(DEBUG_CONFIG_LIMITS.delay.min, config[key]));
+        });
+        ['doubleTapChance', 'tripleTapChance', 'pauseChance'].forEach((key) => {
+            if (Number.isFinite(Number(saved[key]))) config[key] = Number(saved[key]);
+            config[key] = Math.min(DEBUG_CONFIG_LIMITS.chance.max,
+                Math.max(DEBUG_CONFIG_LIMITS.chance.min, config[key]));
+        });
+        if (config.maxDelay < config.minDelay) config.maxDelay = config.minDelay;
+        if (config.pauseMax < config.pauseMin) config.pauseMax = config.pauseMin;
+        return config;
+    }
+
+    function loadDebugConfig() {
         try {
-            const saved = JSON.parse(STORAGE.get('autoLikerCustomDelays'));
-            if (!saved || !Number.isInteger(saved.min) || !Number.isInteger(saved.max) ||
-                saved.min < CUSTOM_DELAY_LIMITS.min || saved.max > CUSTOM_DELAY_LIMITS.max ||
-                saved.max < saved.min) {
-                return { ...CUSTOM_DELAY_DEFAULTS };
-            }
-
-            return { min: saved.min, max: saved.max };
+            const saved = JSON.parse(STORAGE.get('autoLikerDebugConfig'));
+            if (saved) return normalizeDebugConfig(saved);
+            const legacy = JSON.parse(STORAGE.get('autoLikerCustomDelays'));
+            return normalizeDebugConfig({ minDelay: legacy && legacy.min, maxDelay: legacy && legacy.max });
         } catch (error) {
-            return { ...CUSTOM_DELAY_DEFAULTS };
+            return { ...DEBUG_CONFIG_DEFAULTS };
         }
     }
 
@@ -66,7 +85,7 @@
         stealth: 3,
         human: 4,
         combo: 5,
-        custom: 6
+        debug: 6
     });
 
     const MODE_KEYS_BY_ID = Object.freeze(Object.fromEntries(
@@ -75,21 +94,24 @@
 
     function loadSelectedMode() {
         const savedModeId = STORAGE.get('autoLikerMode');
-        return MODE_KEYS_BY_ID[savedModeId] || 'normal';
+        const selectedMode = MODE_KEYS_BY_ID[savedModeId] || 'normal';
+        if (selectedMode === 'debug' && STORAGE.get('autoLikerIncludeDebugMode') !== 'true') {
+            STORAGE.set('autoLikerMode', String(MODE_IDS.human));
+            return 'human';
+        }
+        return selectedMode;
     }
 
     function saveSelectedMode() {
         STORAGE.set('autoLikerMode', String(MODE_IDS[CONFIG.mode]));
     }
 
+    function saveDebugConfig() {
+        STORAGE.set('autoLikerDebugConfig', JSON.stringify(CONFIG.debugConfig));
+    }
+
     function saveCustomDelaySettings() {
-        try {
-            STORAGE.set('autoLikerCustomDelays', JSON.stringify(CONFIG.customDelay));
-        } catch (error) {
-            if (CONFIG.debugMode) {
-                console.warn('Unable to save custom delay settings:', error);
-            }
-        }
+        saveDebugConfig();
     }
 
     // Configuration
@@ -107,7 +129,10 @@
             currentCombo: 0
         },
         mode: loadSelectedMode(),
-        customDelay: loadCustomDelaySettings(),
+        debugConfig: loadDebugConfig(),
+        customDelay: null,
+        showAdvancedControls: STORAGE.get('autoLikerShowAdvancedControls') === 'true',
+        includeDebugMode: STORAGE.get('autoLikerIncludeDebugMode') === 'true',
         comboTimeoutId: null,
         clickTimerIds: new Set(),
         uiTimerIds: new Set(),
@@ -123,6 +148,8 @@
             y: readPosition('autoLikerPosY', '50%')
         }
     };
+
+    CONFIG.customDelay = CONFIG.debugConfig;
 
     function scheduleTrackedTimeout(callback, delay, timerSet) {
         const timerId = setTimeout(() => {
@@ -191,10 +218,9 @@
             burstDelay: 5,
             comboTimeout: 800
         },
-        custom: {
-            min: CONFIG.customDelay.min,
-            max: CONFIG.customDelay.max,
-            name: "Custom Mode",
+        debug: {
+            ...CONFIG.debugConfig,
+            name: "Debug Mode",
             burstCount: 1
         }
     };

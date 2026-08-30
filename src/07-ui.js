@@ -4,6 +4,8 @@
         
         if (CONFIG.enabled) {
             CONFIG.stats.startTime = Date.now();
+                CONFIG.stats.hasActivity = false;
+                if (CONFIG.stats.container) CONFIG.stats.container.style.display = 'none';
             CONFIG.stats.totalClicks = 0;
             CONFIG.stats.successfulClicks = 0;
             CONFIG.stats.failedClicks = 0;
@@ -22,9 +24,14 @@
     let modeUIUpdater = null;
 
     function switchMode() {
-        const modes = Object.keys(MODES);
-        const currentIndex = modes.indexOf(CONFIG.mode);
-        CONFIG.mode = modes[(currentIndex + 1) % modes.length];
+        const modes = ['normal', 'turbo', 'stealth', 'human', 'combo'];
+        if (CONFIG.includeDebugMode) modes.push('debug');
+        if (CONFIG.mode === 'debug' && !CONFIG.includeDebugMode) {
+            CONFIG.mode = 'human';
+        } else {
+            const currentIndex = modes.indexOf(CONFIG.mode);
+            CONFIG.mode = modes[(currentIndex + 1) % modes.length];
+        }
         saveSelectedMode();
         if (modeUIUpdater) {
             modeUIUpdater();
@@ -244,11 +251,15 @@
             const content = document.createElement('div');
             const toggleButton = document.createElement('button');
             const modeButton = document.createElement('button');
+            const includeDebugLabel = document.createElement('label');
+            const includeDebugCheckbox = document.createElement('input');
             const customDelaySection = document.createElement('div');
             const customMinSlider = document.createElement('input');
             const customMaxSlider = document.createElement('input');
             const customMinValue = document.createElement('span');
             const customMaxValue = document.createElement('span');
+            const advancedInputs = {};
+            const debugNumericControls = document.createElement('div');
             const notificationButton = document.createElement('button');
             const statsDiv = document.createElement('div');
             const footer = document.createElement('div');
@@ -327,7 +338,7 @@
             modeButton.style.cssText = `
                 width: 100%;
                 padding: 10px;
-                margin-bottom: 10px;
+                margin-bottom: 4px;
                 border: none;
                 border-radius: 8px;
                 background: #25f4ee;
@@ -336,60 +347,96 @@
                 transition: all 0.3s ease;
             `;
 
+            includeDebugCheckbox.type = 'checkbox';
+            includeDebugCheckbox.checked = CONFIG.includeDebugMode;
+            includeDebugLabel.append(includeDebugCheckbox, ' Include Debug Mode');
+            includeDebugLabel.style.cssText = 'display:block; margin:4px 0 0; font-size:11px; color:rgba(255,255,255,.65); text-align:right;';
+
             customDelaySection.style.cssText = `
                 margin-bottom: 10px;
                 padding: 10px;
                 background: #161823;
                 border-radius: 8px;
             `;
-            customDelaySection.setAttribute('aria-label', 'Custom delay settings');
+            customDelaySection.setAttribute('aria-label', 'Debug settings');
 
             const customTitle = document.createElement('div');
-            customTitle.textContent = 'Custom delay range';
+            customTitle.textContent = 'Debug settings';
             customTitle.style.cssText = 'font-size: 13px; font-weight: 600; margin-bottom: 8px; color: #25f4ee;';
             customDelaySection.appendChild(customTitle);
 
+            const updateDebugControls = () => {
+                const config = CONFIG.debugConfig;
+                customMinSlider.value = String(config.minDelay);
+                customMaxSlider.value = String(config.maxDelay);
+                customMinSlider.max = String(config.maxDelay);
+                customMaxSlider.min = String(config.minDelay);
+                customMinValue.textContent = `${config.minDelay} ms`;
+                customMaxValue.textContent = `${config.maxDelay} ms`;
+                Object.entries(advancedInputs).forEach(([key, input]) => {
+                    input.value = String(key.includes('Chance') ? config[key] * 100 : config[key]);
+                });
+                Object.assign(MODES.debug, config);
+            };
+
+            const setDebugValue = (key, rawValue) => {
+                const isChance = key.includes('Chance');
+                const limit = isChance ? DEBUG_CONFIG_LIMITS.chance : DEBUG_CONFIG_LIMITS.delay;
+                const value = Math.min(limit.max, Math.max(limit.min,
+                    isChance ? Number(rawValue) / 100 : Math.round(Number(rawValue))));
+                CONFIG.debugConfig[key] = Number.isFinite(value) ? value : DEBUG_CONFIG_DEFAULTS[key];
+                if (key === 'minDelay' && CONFIG.debugConfig.maxDelay < CONFIG.debugConfig.minDelay) {
+                    CONFIG.debugConfig.maxDelay = CONFIG.debugConfig.minDelay;
+                } else if (key === 'maxDelay' && CONFIG.debugConfig.minDelay > CONFIG.debugConfig.maxDelay) {
+                    CONFIG.debugConfig.minDelay = CONFIG.debugConfig.maxDelay;
+                } else if (key === 'pauseMin' && CONFIG.debugConfig.pauseMax < CONFIG.debugConfig.pauseMin) {
+                    CONFIG.debugConfig.pauseMax = CONFIG.debugConfig.pauseMin;
+                } else if (key === 'pauseMax' && CONFIG.debugConfig.pauseMin > CONFIG.debugConfig.pauseMax) {
+                    CONFIG.debugConfig.pauseMin = CONFIG.debugConfig.pauseMax;
+                }
+                updateDebugControls();
+                saveDebugConfig();
+            };
+
             const setupDelaySlider = (slider, label, valueDisplay, valueKey) => {
-                slider.type = 'range';
-                slider.min = String(CUSTOM_DELAY_LIMITS.min);
-                slider.max = String(CUSTOM_DELAY_LIMITS.max);
+                slider.type = 'number';
+                slider.min = '10';
+                slider.max = '2000';
                 slider.step = '10';
                 slider.style.cssText = 'width: 100%; accent-color: #25f4ee; cursor: pointer;';
-
                 const row = document.createElement('label');
                 row.style.cssText = 'display: block; margin-bottom: 8px; font-size: 12px; color: rgba(255,255,255,0.85);';
                 const heading = document.createElement('div');
                 heading.style.cssText = 'display: flex; justify-content: space-between; margin-bottom: 4px;';
                 heading.append(label, valueDisplay);
                 row.append(heading, slider);
-                customDelaySection.appendChild(row);
-
-                slider.addEventListener('input', () => {
-                    const value = Number(slider.value);
-                    CONFIG.customDelay[valueKey] = value;
-                    if (valueKey === 'min' && value > CONFIG.customDelay.max) {
-                        CONFIG.customDelay.max = value;
-                        customMaxSlider.value = String(value);
-                    } else if (valueKey === 'max' && value < CONFIG.customDelay.min) {
-                        CONFIG.customDelay.min = value;
-                        customMinSlider.value = String(value);
-                    }
-                    customMinSlider.max = String(CONFIG.customDelay.max);
-                    customMaxSlider.min = String(CONFIG.customDelay.min);
-                    customMinValue.textContent = `${CONFIG.customDelay.min} ms`;
-                    customMaxValue.textContent = `${CONFIG.customDelay.max} ms`;
-                    MODES.custom.min = CONFIG.customDelay.min;
-                    MODES.custom.max = CONFIG.customDelay.max;
-                    saveCustomDelaySettings();
-                });
+                debugNumericControls.appendChild(row);
+                slider.addEventListener('input', () => setDebugValue(valueKey, slider.value));
             };
 
-            customMinSlider.value = String(CONFIG.customDelay.min);
-            customMaxSlider.value = String(CONFIG.customDelay.max);
-            customMinValue.textContent = `${CONFIG.customDelay.min} ms`;
-            customMaxValue.textContent = `${CONFIG.customDelay.max} ms`;
-            setupDelaySlider(customMinSlider, 'Minimum delay', customMinValue, 'min');
-            setupDelaySlider(customMaxSlider, 'Maximum delay', customMaxValue, 'max');
+            setupDelaySlider(customMinSlider, 'Minimum delay', customMinValue, 'minDelay');
+            setupDelaySlider(customMaxSlider, 'Maximum delay', customMaxValue, 'maxDelay');
+            customDelaySection.appendChild(debugNumericControls);
+
+            const advancedLabel = document.createElement('label');
+            const advancedCheckbox = document.createElement('input');
+            advancedCheckbox.type = 'checkbox'; advancedCheckbox.checked = CONFIG.showAdvancedControls;
+            advancedLabel.append(advancedCheckbox, ' Show advanced controls');
+            advancedLabel.style.cssText = 'display:block; margin:4px 0 8px; font-size:11px; color:rgba(255,255,255,.65);';
+            customDelaySection.insertBefore(advancedLabel, customDelaySection.firstChild);
+            const advancedControls = document.createElement('div');
+            [['doubleTapChance','Double-tap chance'],['tripleTapChance','Triple-tap chance'],['pauseChance','Pause chance'],['pauseMin','Minimum pause'],['pauseMax','Maximum pause']].forEach(([key, label]) => {
+                const input = document.createElement('input'); input.type = 'number'; input.min = key.includes('Chance') ? '0' : '10'; input.max = key.includes('Chance') ? '100' : '2000'; input.step = '1'; input.value = String(key.includes('Chance') ? CONFIG.debugConfig[key] * 100 : CONFIG.debugConfig[key]); input.style.width = '70px';
+                advancedInputs[key] = input;
+            const row = document.createElement('label'); row.textContent = label + ' '; row.style.cssText = 'display:block; margin:6px 0; font-size:12px;'; row.appendChild(input); advancedControls.appendChild(row);
+                input.addEventListener('input', () => setDebugValue(key, input.value));
+            });
+            const resetButton = document.createElement('button'); resetButton.type = 'button'; resetButton.textContent = 'Reset to Human defaults'; resetButton.style.cssText = 'font-size:11px; background:none; color:#25f4ee; border:0;'; resetButton.onclick = () => { Object.assign(CONFIG.debugConfig, DEBUG_CONFIG_DEFAULTS); updateDebugControls(); saveDebugConfig(); }; advancedControls.appendChild(resetButton); customDelaySection.appendChild(advancedControls);
+            updateDebugControls();
+            const updateAdvancedVisibility = () => {
+                debugNumericControls.style.display = CONFIG.showAdvancedControls ? 'block' : 'none';
+                advancedControls.style.display = CONFIG.showAdvancedControls ? 'block' : 'none';
+            }; advancedCheckbox.addEventListener('change', () => { CONFIG.showAdvancedControls = advancedCheckbox.checked; STORAGE.set('autoLikerShowAdvancedControls', String(CONFIG.showAdvancedControls)); updateAdvancedVisibility(); }); updateAdvancedVisibility();
 
             notificationButton.type = 'button';
             notificationButton.style.cssText = `
@@ -410,9 +457,10 @@
                 padding: 10px;
                  background: #161823;
                 border-radius: 8px;
-            `;
-
-            footer.innerHTML = `Version __AUTO_LIKER_VERSION__ | Made with ❤️<br>Maintained by joqtan<br>Based on AmpedWasTaken`;
+                    display: none;
+                `;
+                CONFIG.stats.container = statsDiv;
+                footer.innerHTML = `Version __AUTO_LIKER_VERSION__ | Made with ❤️<br>Maintained by joqtan<br>Based on AmpedWasTaken`;
             footer.style.cssText = `
                 margin-top: 15px;
                 padding-top: 15px;
@@ -448,7 +496,7 @@
 
             const updateModeUI = () => {
                 modeButton.textContent = `Current: ${MODES[CONFIG.mode].name}`;
-                customDelaySection.style.display = CONFIG.mode === 'custom' ? 'block' : 'none';
+                customDelaySection.style.display = CONFIG.mode === 'debug' ? 'block' : 'none';
             };
             modeUIUpdater = updateModeUI;
             updateModeUI();
@@ -456,6 +504,17 @@
             modeButton.onclick = () => {
                 switchMode();
             };
+
+            includeDebugCheckbox.addEventListener('change', () => {
+                CONFIG.includeDebugMode = includeDebugCheckbox.checked;
+                STORAGE.set('autoLikerIncludeDebugMode', String(CONFIG.includeDebugMode));
+                if (!CONFIG.includeDebugMode && CONFIG.mode === 'debug') {
+                    CONFIG.mode = 'human';
+                    saveSelectedMode();
+                    if (modeUIUpdater) modeUIUpdater();
+                    showNotification('Debug Mode excluded; switched to Human Mode', 'info');
+                }
+            });
 
             notificationButton.addEventListener('click', (event) => {
                 event.preventDefault();
@@ -524,6 +583,7 @@
             content.appendChild(customDelaySection);
             content.appendChild(notificationButton);
             content.appendChild(statsDiv);
+            content.appendChild(includeDebugLabel);
             content.appendChild(footer);
             
             panel.appendChild(header);

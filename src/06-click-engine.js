@@ -86,7 +86,7 @@
         missingButtonDelay = MISSING_BUTTON_RETRY.initialDelay;
 
         try {
-            const modeConfig = CONFIG.mode === 'custom' ? CONFIG.customDelay : MODES[CONFIG.mode];
+            const modeConfig = CONFIG.mode === 'debug' ? CONFIG.debugConfig : MODES[CONFIG.mode];
             
             if (CONFIG.mode === 'combo') {
                 if (!await burstClick(likeButton, modeConfig.burstCount)) {
@@ -106,7 +106,7 @@
 
                 // Triple and double taps are mutually exclusive. The initial
                 // click above is followed by only the remaining clicks.
-                if (CONFIG.mode === 'human') {
+                if (CONFIG.mode === 'human' || CONFIG.mode === 'debug') {
                     const sequenceRoll = Math.random();
                     if (sequenceRoll < modeConfig.tripleTapChance) {
                         scheduleHumanExtraClicks(likeButton, 2);
@@ -120,7 +120,7 @@
             CONFIG.lastClickTime = now;
 
             let delay;
-            if (CONFIG.mode === 'human') {
+            if (CONFIG.mode === 'human' || CONFIG.mode === 'debug') {
                 if (Math.random() < modeConfig.pauseChance) {
                     delay = Math.floor(Math.random() *
                         (modeConfig.pauseMax - modeConfig.pauseMin + 1) + modeConfig.pauseMin);
